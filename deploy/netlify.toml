@@ -1,0 +1,24 @@
+# Netlify 部署配置
+# 本站点没有构建步骤：整个目录即发布内容。
+
+[build]
+  publish = "."
+  command = ""
+
+# 单文件页面最怕「改了但用户看到旧的」。
+# HTML 设 no-cache：每次访问回源校验，更新立刻生效；
+# 页面无外部静态资源，设与不设都不影响加载速度。
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "SAMEORIGIN"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Cache-Control = "no-cache"
+
+# 单页应用无需路由重写（不存在 404 回退需求）

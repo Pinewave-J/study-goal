@@ -1,0 +1,3567 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- 允许缩放：原先的 maximum-scale=1 + user-scalable=no 会禁用双指放大，
+     属于无障碍缺陷（低视力用户无法放大阅读）。输入框已统一为 16px，
+     不会再触发 iOS 聚焦自动放大的问题，所以这里可以放心放开。 -->
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<!-- 移动端浏览器地址栏配色，随主题由 JS 更新 -->
+<meta name="theme-color" id="theme-color" content="#6c5ce7">
+<meta name="color-scheme" content="light dark">
+<title>学习目标管理台</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2032%2032%27%3E%3Crect%20width%3D%2732%27%20height%3D%2732%27%20rx%3D%278%27%20fill%3D%27%231864ab%27/%3E%3Cpath%20d%3D%27M9%2017.5l4.5%204.5L23%2012%27%20stroke%3D%27%23fff%27%20stroke-width%3D%273%27%20fill%3D%27none%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27/%3E%3C/svg%3E">
+<!-- ============================================================
+     本地存储适配器（静态部署版专用）
+     ------------------------------------------------------------
+     线上版由 WorkBuddy 资料库 SDK（window.__SMART_PAGE__.database）提供数据服务。
+     部署到 GitHub Pages / Netlify 之后没有该 SDK，这里给出一个**接口完全一致**的
+     localStorage 实现：getSchema / query / addRecord / updateRecord / deleteRecord
+     均返回 Promise，页面业务逻辑零改动。
+        数据落在浏览器 localStorage，键前缀 sgt_local_v1_ ，按库 ID 分表存放。
+     首次打开会写入一批示例数据（可在「我的 → 数据管理 → 清空示例数据」一键清除）。
+     ============================================================ -->
+<script>
+(function(){
+'use strict';
+var PREFIX='sgt_local_v1_';
+var SEED_FLAG='sgt_local_seeded_v1';
+var GOALS='OereifjY46k3XWmQX6KVfK';
+var CHECKINS='DRuD6oQI5lrK5IhZQS1fzn';
+var WEEKLIES='kVj8GOSzCqSOUhes5vYBhg';
+var SCHEMAS={"OereifjY46k3XWmQX6KVfK": {"title": "学习目标", "properties": [{"name": "目标名称", "config": {"text": ""}}, {"name": "单位", "config": {"text": ""}}, {"name": "总量", "config": {"number": 0}}, {"name": "截止日期", "config": {"date": "1970-01-01T00:00:00Z"}}, {"name": "配色", "config": {"text": ""}}, {"name": "最大障碍", "config": {"text": ""}}, {"name": "应对策", "config": {"text": ""}}, {"name": "标签", "config": {"select": {"options": [{"text": "示例"}, {"text": "正常"}]}}}, {"name": "状态", "config": {"select": {"options": [{"text": "进行中"}, {"text": "已完成"}, {"text": "已归档"}]}}}, {"name": "创建日期", "config": {"date": "1970-01-01T00:00:00Z"}}]}, "DRuD6oQI5lrK5IhZQS1fzn": {"title": "打卡记录", "properties": [{"name": "目标ID", "config": {"text": ""}}, {"name": "目标名称", "config": {"text": ""}}, {"name": "日期", "config": {"date": "1970-01-01T00:00:00Z"}}, {"name": "数量", "config": {"number": 0}}, {"name": "分钟数", "config": {"number": 0}}, {"name": "是否补记", "config": {"checkbox": false}}, {"name": "备注", "config": {"text": ""}}]}, "kVj8GOSzCqSOUhes5vYBhg": {"title": "周复盘", "properties": [{"name": "周开始日期", "config": {"date": "1970-01-01T00:00:00Z"}}, {"name": "周结束日期", "config": {"date": "1970-01-01T00:00:00Z"}}, {"name": "保持", "config": {"text": ""}}, {"name": "问题", "config": {"text": ""}}, {"name": "尝试", "config": {"text": ""}}, {"name": "下周预案", "config": {"text": ""}}]}};
+var SEED=[
+{goal:{
+ targetName:"背英语单词", unit:"个", total:2000, offsetDays:78, color:"purple",
+ obstacle:"早上起不来，晚上回家只想刷手机", strategy:"如果起不来，我就改成午休时用 App 背 20 个",
+},checkins:[
+ {off:-9,amount:60,minutes:25,note:"地铁上刷了一遍昨天的错词"},
+ {off:-8,amount:45,minutes:20,note:""},
+ {off:-6,amount:80,minutes:30,note:"状态不错，多背了一组"},
+ {off:-4,amount:50,minutes:22,note:""},
+ {off:-3,amount:40,minutes:18,note:"加班，只背了半组"},
+ {off:-2,amount:70,minutes:28,note:""},
+ {off:-1,amount:55,minutes:24,note:"把上周错词过了一遍"},
+]},
+{goal:{
+ targetName:"读《人类简史》", unit:"页", total:440, offsetDays:30, color:"blue",
+ obstacle:"书太厚，翻开就觉得读不完", strategy:"如果觉得读不完，我就只要求自己读 5 页，读完随时可以停",
+},checkins:[
+ {off:-7,amount:22,minutes:40,note:"第三章讲认知革命，比想象中有意思"},
+ {off:-5,amount:18,minutes:35,note:""},
+ {off:-3,amount:25,minutes:45,note:""},
+ {off:-1,amount:15,minutes:30,note:"睡前读的，容易走神"},
+]},
+{goal:{
+ targetName:"Python 入门课", unit:"节", total:30, offsetDays:21, color:"teal",
+ obstacle:"看视频会，自己写就卡住", strategy:"如果卡住，我就先照着敲一遍，不追求自己写出来",
+},checkins:[
+ {off:-6,amount:2,minutes:90,note:"函数那节听了两遍"},
+ {off:-2,amount:1,minutes:45,note:""},
+]},
+];
+
+/* ---- 底层读写 ---- */
+function read(dbId){
+  try{
+    var raw=localStorage.getItem(PREFIX+dbId);
+    var arr=raw?JSON.parse(raw):null;
+    return Object.prototype.toString.call(arr)==='[object Array]'?arr:[];
+  }catch(e){return []}
+}
+function write(dbId,arr){
+  try{localStorage.setItem(PREFIX+dbId,JSON.stringify(arr));return true}
+  catch(e){return false}
+}
+function newId(){
+  return 'r'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+}
+/* 写入用的是 {字段名:{type:value}} 包装形态，库里存的是扁平的 {字段名:value}。
+   取值时按「对象里唯一的那个键」拆包，不硬编码 type 名，
+   免得以后加一种字段类型又要回来改这里。 */
+function unwrap(props){
+  var out={};
+  if(!props||typeof props!=='object')return out;
+  for(var k in props){
+    if(!Object.prototype.hasOwnProperty.call(props,k))continue;
+    var v=props[k];
+    if(v&&typeof v==='object'&&!Array.isArray(v)){
+      var ks=Object.keys(v);
+      out[k]=ks.length?v[ks[0]]:v;
+    }else{out[k]=v}
+  }
+  return out;
+}
+/* 统一走 setTimeout 而不是直接 resolve：SDK 是异步的，页面依赖「then 晚于当前 tick」
+   这一时序（例如写入成功后才 loadAll）。同步 resolve 会让部分状态更新错序。 */
+function later(fn,val){return new Promise(function(res,rej){setTimeout(function(){
+  try{res(fn())}catch(e){rej(e)}
+},60)})}
+
+function seedIfEmpty(){
+  var flag=false;
+  try{flag=localStorage.getItem(SEED_FLAG)==='1'}catch(e){}
+  if(flag)return;
+  /* 只要任何一张表已经有数据，就认为不是「全新环境」，不再灌示例，
+     否则用户清空数据后一刷新示例又冒出来。 */
+  if(read(GOALS).length||read(CHECKINS).length||read(WEEKLIES).length){
+    try{localStorage.setItem(SEED_FLAG,'1')}catch(e){}
+    return;
+  }
+  function dkey(d){
+    var y=d.getFullYear(),m=String(d.getMonth()+1),dd=String(d.getDate());
+    if(m.length<2)m='0'+m; if(dd.length<2)dd='0'+dd;
+    return y+'-'+m+'-'+dd;
+  }
+  function shift(n){var d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+n);return dkey(d)}
+  var goals=[],checkins=[],today=shift(0);
+  SEED.forEach(function(s){
+    var gid=newId();
+    goals.push({
+      _id:gid,
+      '目标名称':s.goal.targetName,
+      '单位':s.goal.unit,
+      '总量':s.goal.total,
+      '截止日期':shift(s.goal.offsetDays),
+      '配色':s.goal.color,
+      '最大障碍':s.goal.obstacle,
+      '应对策':s.goal.strategy,
+      '标签':'示例',
+      '状态':'进行中',
+      '创建日期':today
+    });
+    s.checkins.forEach(function(c){
+      checkins.push({
+        _id:newId(),
+        '目标ID':gid,
+        '目标名称':s.goal.targetName,
+        '日期':shift(c.off),
+        '数量':c.amount,
+        '分钟数':c.minutes,
+        '是否补记':false,
+        '备注':c.note||''
+      });
+    });
+  });
+  write(GOALS,goals);
+  write(CHECKINS,checkins);
+  write(WEEKLIES,[]);
+  try{localStorage.setItem(SEED_FLAG,'1')}catch(e){}
+}
+
+var DB={
+  getSchema:function(args){
+    return later(function(){
+      return SCHEMAS[args&&args.databaseId]||{title:'',properties:[]};
+    });
+  },
+  query:function(args){
+    return later(function(){
+      seedIfEmpty();
+      return {results:read(args&&args.databaseId).slice()};
+    });
+  },
+  addRecord:function(args){
+    return later(function(){
+      var dbId=args&&args.databaseId, rec=unwrap(args&&args.properties);
+      rec._id=newId();
+      var arr=read(dbId); arr.push(rec);
+      if(!write(dbId,arr))throw new Error('localStorage write failed');
+      notify();
+      return {recordId:rec._id,record:rec};
+    });
+  },
+  updateRecord:function(args){
+    return later(function(){
+      var dbId=args&&args.databaseId, id=args&&args.recordId;
+      var arr=read(dbId), patch=unwrap(args&&args.properties), hit=null;
+      for(var i=0;i<arr.length;i++){
+        if(arr[i]._id===id){for(var k in patch){
+          if(Object.prototype.hasOwnProperty.call(patch,k))arr[i][k]=patch[k];
+        } hit=arr[i];break}
+      }
+      if(!hit)throw new Error('record not found: '+id);
+      if(!write(dbId,arr))throw new Error('localStorage write failed');
+      notify();
+      return {recordId:id,record:hit};
+    });
+  },
+  deleteRecord:function(args){
+    return later(function(){
+      var dbId=args&&args.databaseId, id=args&&args.recordId;
+      var arr=read(dbId);
+      var next=arr.filter(function(r){return r._id!==id});
+      write(dbId,next);
+      notify();
+      return {recordId:id,deleted:arr.length!==next.length};
+    });
+  }
+};
+
+/* 多标签页同步：另一个标签页改了数据，这边跟着刷新。
+   window.loadAll 是页面自己挂出来的入口，可直接调。 */
+function notify(){
+  try{localStorage.setItem('sgt_local_touch',String(Date.now()))}catch(e){}
+}
+window.addEventListener('storage',function(e){
+  if(!e||!e.key||e.key.indexOf(PREFIX)!==0&&e.key!=='sgt_local_touch')return;
+  if(typeof window.loadAll==='function'){try{window.loadAll()}catch(err){}}
+});
+
+window.__SMART_PAGE__=window.__SMART_PAGE__||{};
+window.__SMART_PAGE__.database=DB;
+/* 备份 / 迁移用的读写出口，供页面底部注入的备份卡片调用 */
+window.__SGT_LOCAL__={
+  prefix:PREFIX, ids:{goals:GOALS,checkins:CHECKINS,weeklies:WEEKLIES},
+  read:read, write:write, reseed:function(){
+    [GOALS,CHECKINS,WEEKLIES].forEach(function(id){write(id,[])});
+    try{localStorage.removeItem(SEED_FLAG)}catch(e){}
+    seedIfEmpty();
+  }
+};
+})();
+</script>
+
+<style>
+/* ============================================================
+   设计令牌（Design Tokens）
+   ------------------------------------------------------------
+   所有颜色 / 圆角 / 阴影 / 字号都收敛到这里，组件规则一律引用变量，
+   不再出现硬编码色值。这样切换主题只需覆盖同名变量，
+   组件样式一行都不用改 —— 这是「一套结构、两套皮」的前提。
+
+   分层顺序：表面 → 文字 → 品牌 → 语义 → 数据可视化 → 装饰 → 形状
+   ============================================================ */
+:root{
+  color-scheme:light;
+
+  /* —— 表面层级 L0→L3：靠「递进亮度」表达高度，而不是靠阴影 —— */
+  /* —— 表面层级 L0→L3：靠「递进亮度」表达高度，而不是靠阴影 ——
+     浅色下 L0 是冷灰白、L1 是纯白卡片，两档色差很小，
+     所以卡片必须靠 1px 描边（--card-border）把边界画出来。
+     这是 Homarr / Mantine 那套仪表盘观感的关键：先有边，再有层次。 */
+  --bg:#f6f7f9;              /* L0 页面底色 */
+  --card:#ffffff;            /* L1 卡片 */
+  --surface-2:#f1f3f5;       /* L2 卡内浅槽（统计格 / 计划区 / 提示块） */
+  --surface-3:#e9ecef;       /* L3 更深一档（hover / 按下） */
+  --border:#e4e7eb;          /* 分隔线、描边 */
+  --border-strong:#c8cfd6;   /* 需要更明确边界时 / 卡片 hover */
+  --card-border:#e7eaee;     /* 卡片外描边：两套主题下都显形，不再是 transparent */
+  --field-bg:#ffffff;        /* 输入框底色 */
+
+  /* —— 文字三层级：主 / 次 / 最弱 —— */
+  --text:#1f2328;            /* 对卡片底 15.4:1 */
+  --muted:#5b6470;           /* 6.1:1 */
+  --faint:#8b939c;           /* 占位符/刻度：3.1:1，够「弱」也够「看得见」 */
+
+  /* —— 品牌色：中性蓝（对齐 Homarr / Mantine 的蓝系）
+     取值要同时满足三个方向 ≥4.5:1：
+       · 对白底 6.09:1        —— 当文字用（今日标签、链接、分组标题图标）
+       · 白字压其上 6.09:1     —— 当实心按钮底色用
+       · 对 --primary-bg 5.34:1 —— 当徽标/浅底块上的文字用
+     上一版取更亮的 #1971c2 时，压在浅蓝底上只有 4.38:1，徽标文字是不合格的。 */
+  --primary:#1864ab;
+  --primary-l:#4dabf7;
+  --primary-hover:#14548c;
+  --primary-bg:#e7f1ff;
+  --brand:#1864ab;           /* 兼容别名：原代码用了 var(--brand) 但从未定义，
+                                该处样式一直在静默失效，这里补上 */
+  --on-primary:#ffffff;      /* 压在品牌实色上的文字色 */
+  --on-solid:#ffffff;        /* 压在语义实色（成功/危险/警告）上的文字色 */
+  --focus-ring:rgba(24,100,171,.28);
+
+  /* —— 顶栏 / 侧栏头部底色 ——
+     两套主题都是「中性表面 + 1px 下边框」的工具条，不再是品牌色渐变条：
+     仪表盘里一条大面积彩色顶栏会把注意力从数据上拉走，Homarr 也是中性 header。
+     这两个令牌同时被 <meta name="theme-color"> 读取（移动端地址栏配色），
+     applyTheme 直接取 --header-from，所以改这里地址栏会跟着变。 */
+  --header-from:#ffffff;
+  --header-to:#fcfcfd;
+  --on-accent:#1f2328;
+  --on-accent-soft:rgba(15,23,42,.06);   /* 顶栏上控件的底 */
+  --on-accent-hover:rgba(15,23,42,.11);
+
+  /* —— 语义色 ——
+     这三个色既要当「浅底上的文字」（徽标、连续天数、补记标、提醒文案），
+     又要当「实心按钮的底」（打卡、立即打卡、确认清空）。所以取值必须
+     同时满足两个方向 ≥4.5:1 —— 对白底的对比度、以及白字压在它上面的对比度。
+     原来的 #00b894 / #e74c3c / #f39c12 两个方向都只有 2.0~3.8:1，
+     属于「一直都在、但一直没被指出」的可读性欠账。 */
+  --success:#047a58;--success-bg:#e6f5ef;   /* 双向 5.35:1 */
+  --danger:#c0392b;--danger-bg:#fdecea;      /* 双向 5.44:1 */
+  --amber:#9c5c08;--amber-bg:#fdf3e3;        /* 双向 5.36:1 */
+
+  /* —— 热力图色阶（0 = 当天无记录，1→4 = 投入递增）：与主色同系的蓝色阶 —— */
+  --heat-0:#e9ecef;--heat-1:#cfe6fb;--heat-2:#a5d3f6;--heat-3:#4dabf7;--heat-4:#1971c2;
+
+  /* —— 目标配色（用户建目标时六选一）——
+     gc  = 主色：用于色点、进度条、左侧色条、图表柱等「色块」
+     gci = 墨色：用于把该色当**文字**时（已完成量、剩余量、建议量、完成率数字）
+     gcl = 浅档　gcbg = 浅底
+     为什么要分 gc / gci：一个颜色能当色块，不代表它能当文字。
+     亮青绿 #00cec9 当色点很好认，但当文字压在白底上只有 1.97:1 —— 几乎看不见。
+     所以文字一律走 gci（对白底 ≥4.7:1），色块继续用亮色保住辨识度。
+     这些做成 CSS 令牌而不是写死在 JS，是为了让「切主题」只靠 CSS 生效，
+     不必重新渲染整页（否则切主题后所有目标卡都要重画一遍）。
+     ⚠️ 新增配色时，:root 与 [data-theme="dark"] 两处都要补齐，否则会退到兜底色。 */
+  --gc-purple:#6c5ce7;--gci-purple:#5b4bd0;--gcl-purple:#a29bfe;--gcbg-purple:#f0edff;
+  --gc-blue:#0984e3;--gci-blue:#0b6fc2;--gcl-blue:#74b9ff;--gcbg-blue:#e8f4fd;
+  --gc-green:#00a37e;--gci-green:#047a58;--gcl-green:#55efc4;--gcbg-green:#e0f5f0;
+  --gc-orange:#e17055;--gci-orange:#c1502f;--gcl-orange:#fab1a0;--gcbg-orange:#fef0eb;
+  --gc-pink:#e84393;--gci-pink:#c2185b;--gcl-pink:#fd79a8;--gcbg-pink:#fdf0f5;
+  --gc-teal:#00a09c;--gci-teal:#0d7d78;--gcl-teal:#81ecec;--gcbg-teal:#e0f5f5;
+
+  /* 卡片顶部色条的取色口（.card-accent）。每张目标卡用自己的内联
+     style="--accent:该目标配色" 覆盖它；这里必须给一个默认值，
+     万一某张卡漏了内联值，色条会退回品牌色，而不是整条消失（未定义令牌是静默失效）。 */
+  --accent:var(--primary);
+
+  /* —— 装饰：阴影 / 遮罩 / 浮层 ——
+     仪表盘风格里层次主要由描边承担，阴影只留给真正「浮起来」的元素（模态、toast、
+     移动端底部导航），常态卡片一律不用阴影 —— 否则一屏十几张卡各带一团阴影，页面会发脏。 */
+  --shadow-sm:0 1px 2px rgba(16,24,40,.05);
+  --shadow:0 1px 2px rgba(16,24,40,.04);
+  --shadow-lg:0 16px 40px rgba(16,24,40,.18);
+  --shadow-nav:0 -2px 10px rgba(16,24,40,.06);
+  --shadow-overdue:0 0 0 1px rgba(192,57,43,.45);   /* 逾期：用一圈红描边强调，不用红色光晕 */
+  --overlay:rgba(23,26,33,.45);
+  /* 提示条独立令牌：原实现直接拿 --text 当底色，
+     暗色下 --text 会变成亮色 → 白底白字。必须与文字色解耦。 */
+  --toast-bg:#1f2328;--toast-text:#ffffff;--toast-border:transparent;
+  --ring:#ffffff;            /* 色板选中态的内圈描边 */
+
+  /* —— 形状与字号阶 ——
+     小圆角是仪表盘观感的另一半：14px→8px 之后，卡片从「圆润的移动端卡片」
+     变成「密度更高的数据面板」，这是本次参照 Homarr 的核心改动之一。 */
+  --radius-sm:6px;--radius:8px;--radius-lg:12px;
+  --fs-xs:11px;--fs-sm:12px;--fs-base:14px;--fs-md:15px;--fs-lg:17px;--fs-xl:22px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue","PingFang SC","Microsoft YaHei",sans-serif;
+
+  /* —— 动效令牌 ——
+     与主题无关（深浅两套皮共用同一套节奏），所以只定义在 :root，暗色块不覆写。
+     按钮动效层只允许用这 2 条曲线 + 4 档时长，动效风格才不会散。 */
+  --ease-std:cubic-bezier(.4,0,.2,1);        /* 通用进出：扫入 / 涟漪 / 换色 */
+  --ease-spring:cubic-bezier(.34,1.56,.64,1);/* 弹簧回弹：按压 / 成功回弹 */
+  --motion-press:160ms;   /* 按压 */
+  --motion-quick:260ms;   /* 悬停类 */
+  --motion-morph:420ms;   /* 形变 */
+  --motion-long:620ms;    /* 涟漪 / 转圈 */
+}
+
+/* ============================================================
+   暗色主题（默认主题）
+   ------------------------------------------------------------
+   参照 Homarr / Mantine 的深色阶，三条原则：
+   ①  层次用「亮度阶 + 1px 描边」表达，不依赖阴影 —— 暗底上阴影几乎
+      不可见，卡片若只靠阴影会糊成一片。故 --card-border 在这里常驻显形。
+   ②  品牌色整体「提亮」：浅色主色 #1971c2 压在深底上只有 3.4:1，
+      文字和图标都会发闷。故暗色把 --primary 换成亮档 #4dabf7，
+      并把「压在品牌色上的文字」翻转为深色（--on-primary）。
+   ③  语义色同向处理：前景提亮、底色压深，保证正文 ≥4.5:1。
+   ============================================================ */
+[data-theme="dark"]{
+  color-scheme:dark;
+
+  /* 表面：从近黑逐级抬升（#131417 → #1a1b1e → #212226 → #2a2b30） */
+  --bg:#131417;
+  --card:#1a1b1e;
+  --surface-2:#212226;
+  --surface-3:#2a2b30;
+  --border:#2b2d32;
+  --border-strong:#3d4046;
+  --card-border:#282a2f;
+  --field-bg:#1e1f23;
+
+  /* 文字：主文字对卡片底约 13:1，次要约 6:1，均达 WCAG AA */
+  --text:#e6e7ea;
+  --muted:#a1a4ab;
+  --faint:#6e727a;
+
+  /* 品牌：提亮 + 前景翻转 */
+  --primary:#4dabf7;
+  --primary-l:#74c0fc;
+  --primary-hover:#74c0fc;
+  --primary-bg:#12293c;
+  --brand:#4dabf7;
+  --on-primary:#08131c;
+  --on-solid:#14161c;
+  --focus-ring:rgba(77,171,247,.45);
+
+  /* 顶栏/侧栏头部：比页面底亮一档，靠下边框与内容分开 */
+  --header-from:#1a1b1e;
+  --header-to:#17181b;
+  --on-accent:#e6e7ea;
+  --on-accent-soft:rgba(255,255,255,.07);
+  --on-accent-hover:rgba(255,255,255,.13);
+
+  /* 语义色：前景提亮、底色压深 */
+  --success:#3ddc97;--success-bg:#12352a;
+  --danger:#ff7b72;--danger-bg:#3a2022;
+  --amber:#ffb020;--amber-bg:#3a2c12;
+
+  /* 热力图：0 级必须比卡片底更深才看得出「这是空格」，
+     4 级用提亮后的品牌色，保证整条色阶在暗底上都可辨 */
+  --heat-0:#22242a;--heat-1:#17324a;--heat-2:#1f5486;--heat-3:#2f86c9;--heat-4:#4dabf7;
+
+  /* 目标配色：主色统一提亮到在深底上也能当文字用（对卡片底 ≥6:1），
+     浅底反过来压深成「同色系暗底」，保住「这个颜色代表这个目标」的识别度。 */
+  --gc-purple:#a99cff;--gci-purple:#a99cff;--gcl-purple:#c7c1ff;--gcbg-purple:#262254;
+  --gc-blue:#5eb3f6;--gci-blue:#5eb3f6;--gcl-blue:#8fcbff;--gcbg-blue:#12304d;
+  --gc-green:#4ce0a5;--gci-green:#4ce0a5;--gcl-green:#8af0c6;--gcbg-green:#12352a;
+  --gc-orange:#ff9d7e;--gci-orange:#ff9d7e;--gcl-orange:#ffbea8;--gcbg-orange:#3b241c;
+  --gc-pink:#ff7fc0;--gci-pink:#ff7fc0;--gcl-pink:#ffa8d2;--gcbg-pink:#3b1a2c;
+  --gc-teal:#4fe3de;--gci-teal:#4fe3de;--gcl-teal:#8af0ec;--gcbg-teal:#0f3534;
+  --accent:var(--primary);   /* 卡片顶部色条的默认取色口，见 :root 里的说明 */
+
+  /* 装饰：阴影加深但仍保留（供浮层使用），常态卡片层次交给描边 */
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+  --shadow:0 1px 2px rgba(0,0,0,.35);
+  --shadow-lg:0 18px 44px rgba(0,0,0,.66);
+  --shadow-nav:0 -2px 12px rgba(0,0,0,.5);
+  --shadow-overdue:0 0 0 1px rgba(255,123,114,.5);
+  --overlay:rgba(0,0,0,.66);
+  --toast-bg:#2b2d33;--toast-text:#f1f3f8;--toast-border:rgba(255,255,255,.10);
+  --ring:#131417;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:16px;-webkit-text-size-adjust:100%}
+body{
+  font-family:var(--font);background:var(--bg);color:var(--text);
+  line-height:1.6;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+  /* 主题切换时底色与文字做一次柔和过渡，避免整页闪跳 */
+  transition:background-color .25s ease,color .25s ease;
+}
+input,textarea,select,button{font-family:inherit;font-size:inherit;color:inherit}
+input[type=number]{-moz-appearance:textfield}
+input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+
+/* —— 选中文字：用品牌色浅底，两套主题都成立 —— */
+::selection{background:var(--primary-bg);color:var(--primary)}
+[data-theme="dark"] ::selection{color:var(--text)}
+
+/* —— 键盘焦点环：只在键盘操作时出现，不影响鼠标点击的观感 ——
+   原来是完全没有的，表单以外的地方键盘无法定位，属于无障碍缺口。 */
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px;border-radius:4px}
+.btn:focus-visible,.nav-item:focus-visible{outline-offset:3px}
+
+/* —— 桌面端滚动条：默认样式在暗色下是一根突兀的浅灰条 —— */
+@media(min-width:769px){
+  .content{scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent}
+  .content::-webkit-scrollbar{width:9px;height:9px}
+  .content::-webkit-scrollbar-track{background:transparent}
+  .content::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:5px;border:2px solid var(--bg)}
+  .content::-webkit-scrollbar-thumb:hover{background:var(--faint)}
+}
+
+/* —— 尊重系统「减少动效」偏好：动效敏感用户不应被彩带和位移打扰 —— */
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+  .confetti-piece{display:none}
+  /* 涟漪是靠 JS 现插节点 + animation 播的，压到 .01ms 会留下一个静止的墨点，
+     不如直接不显示。按钮的按压色变仍在，反馈不会丢。 */
+  .ripple{display:none}
+  /* spinner 同理：0.01ms 的旋转会变成一个卡住的半环，看着像渲染坏了 */
+  .btn.is-busy::after{display:none}
+}
+
+/* Layout
+   两套骨架，同一段 HTML：
+   · ≥1025px —— 左侧栏（品牌区 + 导航 + 底部工具）｜右侧内容（吸顶工具条 + 面板）
+   · ≤1024px —— 顶部品牌条（含工具）+ 内容 + 底部固定导航
+   靠媒体查询切换形态，不维护两份 DOM。 */
+#app{min-height:100vh;display:flex;flex-direction:column}
+
+/* --- 品牌条 / 侧栏头部 ---
+   移动端：吸顶的顶部条，品牌 + 工具（同步状态、主题）都在这一行。
+   桌面端：退化为侧栏里的品牌区，工具整套搬到内容区的吸顶工具条上。
+   两处的同步徽标 / 主题按钮是两段独立 DOM，共用 js-sync-badge / js-theme-btn 类名，
+   由 JS 同时更新两处，不会出现「只有一处被更新」的半死状态。 */
+.app-header{position:sticky;top:0;z-index:70;display:flex;align-items:center;gap:8px;padding:10px 14px;background:linear-gradient(180deg,var(--header-from),var(--header-to));color:var(--on-accent);border-bottom:1px solid var(--border);flex-shrink:0}
+.app-header .brand-mark{flex-shrink:0;display:block}
+.app-header .brand-name{font-size:var(--fs-md);font-weight:600;white-space:nowrap;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.header-tools{display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0}
+.app-header .sync-badge{display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);padding:4px 9px;border-radius:999px;background:var(--on-accent-soft);color:var(--text);white-space:nowrap;flex-shrink:0;min-width:0}
+.app-header .sync-badge svg{width:12px;height:12px;flex-shrink:0}
+.app-header .sync-badge .sb-label{overflow:hidden;text-overflow:ellipsis}
+/* 状态配色用 0,3,0 的权重写全（底 + 字）：
+   下面还有一条通用的 .sync-badge.xxx 底色规则（0,2,0），
+   若这里只写 color，背景会被那条通用规则接管，顶栏徽标的底色就不是这里想要的了。 */
+.app-header .sync-badge.synced{color:var(--success);background:var(--success-bg)}
+.app-header .sync-badge.syncing{color:var(--primary);background:var(--primary-bg)}
+.app-header .sync-badge.offline{color:var(--danger);background:var(--danger-bg)}
+
+/* --- 主题切换按钮：方形小按钮，与工具条上其他图标按钮同一形态 --- */
+.theme-btn{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:var(--radius-sm);cursor:pointer;padding:0;background:var(--on-accent-soft);border:1px solid transparent;color:var(--text);transition:background .16s,color .16s}
+.theme-btn:hover{background:var(--on-accent-hover)}
+.theme-btn:active{transform:scale(.94)}
+
+/* --- 内容区：吸顶工具条 + 面板 --- */
+.content{flex:1;overflow-y:auto;padding:0 14px 12px;max-width:100%}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+/* 吸顶工具条：Homarr 式的内容区头部（当前模块 + 工具 + 主操作）。
+   负 margin 抵消 .content 的横向内边距，让它通铺到内容区两侧。
+   ⚠️ 移动端不能吸顶：那一层是「页面」在滚动，吸顶会与上方品牌条叠在一起。 */
+.topbar{display:flex;align-items:center;gap:10px;margin:0 -14px 14px;padding:11px 14px;background:var(--bg);border-bottom:1px solid var(--border)}
+.topbar-title{display:flex;align-items:center;gap:8px;min-width:0;font-size:var(--fs-md);font-weight:600}
+.topbar-title svg{color:var(--primary);flex-shrink:0;display:block}
+.topbar-title h1{margin:0;font-size:var(--fs-md);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar-tools{display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0}
+/* 工具条里的同步状态与主题按钮只在桌面显示 —— 窄屏这两个已经在顶部品牌条上了。
+   ⚠️ 这条必须排在 .topbar .sync-badge / .topbar .theme-btn 之后（同为 0,2,0 权重，后出现的赢），
+      排前面会被下面的 display:inline-flex 反压回去，窄屏就会顶着两个同步徽标。 */
+.topbar .sync-badge{display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-sm);padding:5px 10px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);color:var(--muted);white-space:nowrap}
+.topbar .sync-badge.synced{color:var(--success);background:var(--success-bg);border-color:transparent}
+.topbar .sync-badge.syncing{color:var(--primary);background:var(--primary-bg);border-color:transparent}
+.topbar .sync-badge.offline{color:var(--danger);background:var(--danger-bg);border-color:transparent}
+.topbar .theme-btn{background:var(--surface-2);border-color:var(--border);color:var(--text)}
+.topbar .theme-btn:hover{background:var(--surface-3)}
+.topbar-tools .sync-badge,.topbar-tools .theme-btn{display:none}
+
+/* --- 分组容器：Homarr 的 category（小字标题 + 字距 + 右侧细线） --- */
+.gs-section{margin-bottom:18px}
+.gs-section:last-child{margin-bottom:0}
+
+/* --- 侧栏底部（仅桌面）：同步入口 + 一句说明 --- */
+.sidebar-foot{display:none;margin-top:auto;padding:12px;border-top:1px solid var(--border);flex-direction:column;gap:8px}
+.sidebar-note{font-size:var(--fs-xs);color:var(--muted);line-height:1.5}
+
+/* Nav */
+.nav{display:flex;flex-shrink:0;background:var(--card);border-top:1px solid var(--border)}
+.nav-item{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;background:none;border:none;cursor:pointer;color:var(--muted);transition:color .16s,background .16s;min-height:52px;min-width:44px}
+.nav-item.active{color:var(--primary)}
+.nav-item svg{width:20px;height:20px}
+.nav-item span{font-size:var(--fs-xs)}
+/* 移动端：激活项顶部一小段横线，扫读时比单纯换色更容易定位 */
+.nav-item.active::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:24px;height:2px;border-radius:0 0 2px 2px;background:var(--primary)}
+
+/* Desktop */
+@media(min-width:1025px){
+  #app{flex-direction:row}
+  .sidebar{width:248px;display:flex;flex-direction:column;flex-shrink:0;border-right:1px solid var(--border);background:var(--card);position:sticky;top:0;height:100vh}
+  /* 侧栏头部只留品牌：工具已搬进内容区工具条 */
+  .app-header{position:static;padding:16px;background:transparent;border-bottom:1px solid var(--border)}
+  .app-header .brand-name{font-size:var(--fs-base)}
+  .app-header .header-tools{display:none}
+  .content{padding:0 28px 28px;max-width:1320px}
+  .topbar{position:sticky;top:0;z-index:60;margin:0 -28px 16px;padding:14px 28px}
+  .topbar-tools .sync-badge{display:inline-flex}
+  .topbar-tools .theme-btn{display:inline-flex}
+  .nav{flex-direction:column;border-top:none;flex:1;padding:8px;gap:2px;overflow-y:auto}
+  .nav-item{flex:none;flex-direction:row;justify-content:flex-start;gap:10px;padding:9px 12px;border-radius:var(--radius-sm);font-size:var(--fs-base);font-weight:500;min-height:38px}
+  .nav-item:hover{background:var(--surface-2);color:var(--text)}
+  .nav-item.active{background:var(--primary-bg);color:var(--primary);font-weight:600}
+  .nav-item.active::before{display:none}
+  .nav-item span{font-size:var(--fs-base)}
+  .nav-item svg{width:18px;height:18px}
+  .sidebar-foot{display:flex}
+}
+
+/* Tablet */
+@media(min-width:769px) and (max-width:1024px){
+  #app{flex-direction:column}
+  .nav{flex-direction:row;padding:0 12px}
+  .nav-item{flex:1;flex-direction:row;justify-content:center;gap:8px}
+  .nav-item svg{width:18px;height:18px}
+  .nav-item span{font-size:var(--fs-sm)}
+  .content{padding:0 20px 24px;max-width:1000px;margin:0 auto}
+  .topbar{margin:0 -20px 16px;padding:12px 20px}
+  .app-header{padding:12px 20px}
+}
+
+/* Mobile */
+@media(max-width:768px){
+  #app{padding-bottom:0}
+  .nav{position:fixed;bottom:0;left:0;right:0;z-index:100;box-shadow:var(--shadow-nav);padding-bottom:env(safe-area-inset-bottom)}
+  .content{padding:0 12px 12px;padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+  .topbar{margin:0 -12px 12px;padding:10px 12px}
+  .nav-item span{font-size:var(--fs-xs)}
+}
+/* 超窄屏（≤400px）：同步徽标只留图标，把文字收起来，优先保证标题和工具不被挤掉 */
+@media(max-width:400px){
+  .app-header{gap:6px;padding:10px}
+  .app-header .brand-name{font-size:var(--fs-base)}
+  .app-header .sync-badge .sb-label{display:none}
+  .app-header .sync-badge{padding:5px 7px}
+  .topbar-title h1{font-size:var(--fs-base)}
+}
+
+/* Cards
+   仪表盘式卡片：靠 1px 描边分层，常态不投影（一屏十几张卡各带一团阴影会发脏）；
+   hover 只让描边变亮一档，避免卡片「跳起来」干扰阅读。
+   顶部 3px 色条（.card-accent）替代原来左边 4px 的粗色条：
+   颜色仍然代表目标，但在网格里不再把每张卡片的左边缘切碎。 */
+.card{position:relative;background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-bottom:10px;transition:background-color .2s ease,border-color .16s ease}
+.card:hover{border-color:var(--border-strong)}
+.card-body{padding:14px}
+.card-accent{position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent,var(--primary))}
+.card-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.color-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+/* 目标头像块：底色/墨色都来自目标的配色令牌，首字提供一眼可辨的标识。
+   比原来那个 12px 的小圆点信息量大得多，也顺手把卡片头部「立」起来了。 */
+.goal-avatar{width:30px;height:30px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;flex-shrink:0;line-height:1;background:var(--surface-2);color:var(--muted)}
+.goal-name{font-size:var(--fs-md);font-weight:600;flex:1;min-width:0;word-break:break-word;line-height:1.35}
+
+/* Progress bar */
+.progress{height:6px;background:var(--surface-3);border-radius:3px;overflow:hidden;margin-bottom:12px}
+.progress-fill{height:100%;border-radius:3px;transition:width .5s ease}
+
+/* Stats —— 数字统一用等宽数字（tabular-nums），
+   否则「1」和「24」切换时整行会轻微抖动 */
+.stats-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.stat{flex:1;min-width:80px;text-align:center;padding:8px 4px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm)}
+.stat-num{font-size:18px;font-weight:600;line-height:1.25;font-variant-numeric:tabular-nums}
+.stat-label{font-size:var(--fs-xs);color:var(--muted);margin-top:2px}
+
+/* Buttons
+   主按钮用实色而不是渐变：仪表盘里渐变会跟数据争夺注意力，
+   而且实色 --primary 双向对比度都过 4.5:1，白字压上去最稳。 */
+.btn{position:relative;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 14px;border:1px solid transparent;border-radius:var(--radius-sm);cursor:pointer;font-size:var(--fs-base);font-weight:500;transition:background .16s,color .16s,border-color .16s,transform .12s;min-height:38px}
+.btn:active{transform:scale(.98)}
+.btn-primary{background:var(--primary);color:var(--on-primary)}
+.btn-primary:hover{background:var(--primary-hover)}
+.btn-success{background:var(--success);color:var(--on-solid)}
+.btn-danger{background:var(--danger);color:var(--on-solid)}
+.btn-amber{background:var(--amber);color:var(--on-solid)}
+.btn-outline{background:var(--surface-2);border-color:var(--border);color:var(--text)}
+.btn-outline:hover{background:var(--surface-3)}
+.btn-outline:active{border-color:var(--primary);color:var(--primary)}
+.btn-sm{padding:6px 12px;font-size:var(--fs-sm);min-height:34px}
+.btn-block{width:100%}
+.btn-icon{display:inline-flex;align-items:center;justify-content:center;padding:6px;min-height:32px;min-width:32px;background:transparent;border:1px solid transparent;cursor:pointer;color:var(--muted);border-radius:var(--radius-sm);transition:background .16s,color .16s,border-color .16s}
+.btn-icon:hover{background:var(--surface-2);color:var(--text);border-color:var(--border)}
+.btn-icon.danger:hover,.btn-icon.danger:active{color:var(--danger);background:var(--danger-bg);border-color:transparent}
+
+/* Forms
+   ⚠️ 字号必须是 16px：iOS Safari 对 <16px 的输入框会自动放大整页，
+   用户点一下输入框页面就跳缩，是移动端最恼人的体验问题之一。 */
+.form-group{margin-bottom:14px}
+.form-label{display:block;font-size:13px;font-weight:500;margin-bottom:6px;color:var(--text)}
+.form-input,.form-select,.form-textarea{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:16px;background:var(--field-bg);color:var(--text);transition:border-color .16s,background-color .2s}
+.form-input:hover,.form-select:hover,.form-textarea:hover{border-color:var(--border-strong)}
+.form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--focus-ring)}
+.form-input::placeholder,.form-textarea::placeholder{color:var(--faint)}
+.form-textarea{min-height:60px;resize:vertical}
+.form-hint{font-size:var(--fs-sm);color:var(--muted);margin-top:4px}
+.form-row{display:flex;gap:10px}
+.form-row>*{flex:1}
+/* 目标没设截止日时，卡片上标出来（不再是偷偷显示成「今天到期」） */
+.no-deadline{color:var(--amber);font-weight:500}
+
+/* Today section
+   分组标题（Homarr 的 category 标题）：小字 + 字距 + 右侧一条细线。
+   细线把标题与它下面的内容「划」在同一组里，比加粗大字更省视觉预算。 */
+.section-title{font-size:var(--fs-sm);font-weight:600;letter-spacing:.04em;color:var(--muted);margin:0 0 10px;display:flex;align-items:center;gap:7px}
+.section-title svg{color:var(--faint);flex-shrink:0}
+.section-title::after{content:'';flex:1;height:1px;min-width:10px;background:var(--border)}
+/* 提醒卡：底色全部走语义浅底令牌，左描边承担「哪一类」的辨识 */
+.alert-card{padding:12px 14px;border-radius:var(--radius-sm);margin-bottom:8px;display:flex;align-items:center;gap:10px}
+.alert-card.red{background:var(--danger-bg);border-left:3px solid var(--danger)}
+.alert-card.yellow{background:var(--amber-bg);border-left:3px solid var(--amber)}
+.alert-card.blue{background:var(--primary-bg);border-left:3px solid var(--primary)}
+.alert-card.green{background:var(--success-bg);border-left:3px solid var(--success)}
+.alert-text{flex:1;font-size:13px;line-height:1.5}
+.alert-text strong{display:block;font-size:var(--fs-base);margin-bottom:2px}
+/* 黄卡里带图标时，标题行图标与文字对齐（needLoginNoticeHtml 用了 ic('lock')） */
+.alert-card .alert-text>svg{vertical-align:-3px;margin-right:4px;color:var(--amber);flex-shrink:0}
+.alert-card.red .alert-text>svg{color:var(--danger)}
+/* 只读模式下不可用的控件要一眼看出来，不能只是点不动 */
+.btn:disabled,.color-opt[aria-disabled="true"]{opacity:.45;cursor:not-allowed;pointer-events:none}
+
+/* Quick checkin */
+.quick-checkin{display:flex;gap:8px;align-items:center;margin-top:8px}
+.quick-checkin input{width:70px;padding:8px;text-align:center;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:16px;background:var(--field-bg);color:var(--text)}
+.quick-checkin .unit{font-size:13px;color:var(--muted)}
+.quick-checkin .btn{flex-shrink:0}
+
+/* Plan section */
+.plan-section{margin-top:10px;padding:10px;background:var(--surface-2);border-radius:var(--radius-sm);font-size:13px}
+.plan-row{margin-bottom:6px}
+.plan-row:last-child{margin-bottom:0}
+.plan-label{font-weight:600;color:var(--muted);margin-right:4px}
+.plan-value{color:var(--text)}
+
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:var(--overlay);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal-overlay.hidden{display:none}
+.modal-content{background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius-lg);width:100%;max-width:460px;max-height:85vh;overflow-y:auto;padding:20px;box-shadow:var(--shadow-lg)}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.modal-title{font-size:var(--fs-lg);font-weight:600}
+.modal-close{background:none;border:none;cursor:pointer;padding:4px;color:var(--muted);border-radius:6px}
+
+/* Toast
+   ⚠️ 原实现用 background:var(--text) —— 暗色下 --text 会变成亮色，
+   于是提示条成了「浅底 + 白字」，直接看不见。这里拆成独立令牌。 */
+.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);max-width:calc(100vw - 32px);background:var(--toast-bg);color:var(--toast-text);border:1px solid var(--toast-border);padding:10px 20px;border-radius:var(--radius-sm);z-index:300;font-size:var(--fs-base);box-shadow:var(--shadow-lg);transition:opacity .3s}
+.toast.hidden{opacity:0;pointer-events:none}
+.toast.error{background:var(--danger);color:var(--on-solid);border-color:transparent}
+.toast.success{background:var(--success);color:var(--on-solid);border-color:transparent}
+
+/* Sync status */
+.sync-badge{display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-sm);padding:3px 8px;border-radius:999px}
+.sync-badge.synced{background:var(--success-bg);color:var(--success)}
+.sync-badge.syncing{background:var(--primary-bg);color:var(--primary)}
+.sync-badge.offline{background:var(--danger-bg);color:var(--danger)}
+
+/* Progress ring */
+.progress-ring-wrap{display:flex;align-items:center;gap:16px}
+.progress-ring{flex-shrink:0}
+
+/* Chart */
+.chart-wrap{margin-top:16px}
+.chart-legend{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:8px}
+.legend-item{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)}
+.legend-dot{width:8px;height:8px;border-radius:2px}
+
+/* Records list
+   移动端没有 hover，删除按钮不能只在 hover 时才出现，否则手机上永远删不掉，
+   故在窄屏常驻显示（见下方媒体查询）。 */
+.record-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--radius-sm);font-size:13px;transition:background .2s}
+.record-item:hover{background:var(--surface-2)}
+.record-date{color:var(--muted);font-size:var(--fs-sm);min-width:70px}
+.record-amt{font-weight:600;font-variant-numeric:tabular-nums}
+.record-min{color:var(--muted);font-size:var(--fs-sm);font-variant-numeric:tabular-nums}
+.record-tag{font-size:10px;padding:1px 5px;border-radius:4px;background:var(--amber-bg);color:var(--amber)}
+.record-del{margin-left:auto;opacity:0;transition:opacity .2s}
+.record-item:hover .record-del{opacity:1}
+/* ===== 学习备注（第十二阶段） =====
+   备注是「每条打卡记录」的自由文本：第几页到第几页、掌握了哪个 API、看了哪一讲。
+   展示上让它**单独占一行**，不塞进 .record-item 的横向 flex ——
+   记录行本来就有「色点 / 目标名 / 数量 / 用时 / 删除」五段，再挤一段正文，
+   目标名会被压成一格宽、长备注也会把整行撑变形。
+   所以外面包一层 .rec-wrap（记录行 + 备注行各占一行），
+   并把整行高亮从 .record-item 上移到 .rec-wrap —— 否则鼠标移到备注上高亮会断掉。 */
+.rec-wrap{border-radius:var(--radius-sm)}
+.rec-wrap:hover{background:var(--surface-2)}
+.rec-note{display:flex;align-items:flex-start;gap:6px;padding:0 10px 9px;font-size:var(--fs-sm);line-height:1.6;color:var(--muted)}
+.rec-note-ic{flex:0 0 auto;margin-top:2px;color:var(--faint)}
+.rec-note-text{flex:1;min-width:0;white-space:pre-wrap;word-break:break-word;color:var(--text)}
+.rec-note-empty{color:var(--faint)}
+/* 备注行整行可点即可编辑（不做成独立小按钮：小按钮在手机上够不到 44px）。
+   用虚线下划线 + 右侧编辑图标暗示「这里能点」，鼠标悬停整行变主色。 */
+.rec-note-editable{cursor:pointer}
+.rec-note-editable .rec-note-text{text-decoration:underline dotted var(--border-strong);text-underline-offset:3px}
+.rec-note-editable:hover .rec-note-text{color:var(--primary)}
+.rec-note-edit-ic{flex:0 0 auto;margin-top:2px;color:var(--faint);transition:color .2s}
+.rec-note-editable:hover .rec-note-edit-ic{color:var(--primary)}
+/* 「最近动态」里的备注：那里是紧凑流水，不套 .rec-note 的横向 padding，
+   改为目标名下方一行小字，最多两行、超出省略（全量内容在最近记录 / 周报明细 / 学习日志里看）。
+   title 属性带上全文，鼠标悬停仍能读完整。 */
+.feed-note{margin-top:2px;font-size:var(--fs-sm);color:var(--text);white-space:pre-wrap;word-break:break-word;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.learning-log .log-day{margin-top:12px}
+.learning-log .log-day-head{display:flex;align-items:baseline;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:var(--fs-sm);font-weight:600;color:var(--muted)}
+.learning-log .log-day-sum{margin-left:auto;font-weight:400;font-size:var(--fs-xs)}
+.learning-log .log-item{display:flex;gap:8px;align-items:flex-start;padding:9px 10px;border-radius:var(--radius-sm);font-size:13px}
+.learning-log .log-item:hover{background:var(--surface-2)}
+.learning-log .log-body{flex:1;min-width:0}
+.learning-log .log-meta{color:var(--muted);font-size:var(--fs-xs);font-variant-numeric:tabular-nums}
+/* 日志里的备注行也是可点的（补写/修改），必须给出「能点」的两个信号：
+   手型光标 + 悬停变主色。少了 cursor 就是「能点但看不出来」——
+   线上实测过一次：role/tabindex/onclick 都在，光标却是 auto，等于把入口藏起来了。 */
+.learning-log .log-note{margin-top:3px;white-space:pre-wrap;word-break:break-word;cursor:pointer}
+.learning-log .log-note:hover{color:var(--primary)}
+.learning-log .log-note.is-empty{color:var(--faint)}
+@media(hover:none){
+  .record-del{opacity:1}
+}
+
+/* Confetti */
+.confetti-piece{position:fixed;width:10px;height:10px;top:-10px;z-index:500;border-radius:2px;animation:confetti-fall 3s ease-in forwards}
+@keyframes confetti-fall{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0}}
+
+/* Empty */
+.empty{text-align:center;padding:32px 16px;color:var(--muted);font-size:var(--fs-base)}
+.empty svg{margin-bottom:8px;opacity:.45}
+
+/* Weekly */
+.week-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.week-display{font-size:var(--fs-md);font-weight:600}
+.week-summary{display:flex;gap:8px;margin-bottom:16px}
+.week-stat{flex:1;text-align:center;padding:11px 8px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm)}
+.week-stat-num{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.3}
+.week-stat-label{font-size:var(--fs-xs);color:var(--muted);margin-top:2px}
+.week-compare{font-size:13px;color:var(--muted);margin-bottom:16px;padding:8px 12px;background:var(--surface-2);border-radius:var(--radius-sm);line-height:1.7}
+
+/* Misc */
+.divider{height:1px;background:var(--border);margin:12px 0}
+.fade-in{animation:fadeIn .3s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.skeleton-h{height:16px;background:linear-gradient(90deg,var(--border) 25%,var(--surface-2) 50%,var(--border) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:4px;margin-bottom:8px}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.tag{display:inline-block;font-size:var(--fs-xs);padding:2px 7px;border-radius:4px;background:var(--primary-bg);color:var(--primary);margin-left:6px}
+.tag.amber{background:var(--amber-bg);color:var(--amber)}
+.color-picker{display:flex;gap:8px;flex-wrap:wrap}
+.color-opt{width:32px;height:32px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:border-color .2s,box-shadow .2s}
+/* 选中态：内圈用页面底色、外圈用主色，在浅色与暗色下都读得出来 */
+.color-opt.selected{border-color:var(--ring);box-shadow:0 0 0 2px var(--primary)}
+.instructions{background:var(--surface-2);border-radius:var(--radius-sm);padding:16px;font-size:13px;line-height:1.8}
+.instructions ol{padding-left:20px}
+.instructions li{margin-bottom:4px}
+
+/* ===== 卡片标题 / 分区徽标 ===== */
+.card-title{display:flex;align-items:center;gap:6px;padding:14px 16px 0;font-size:var(--fs-base);font-weight:600}
+.card-title-note{margin-left:auto;font-size:var(--fs-sm);font-weight:400;color:var(--muted)}
+.card-title-note b{color:var(--primary);font-variant-numeric:tabular-nums}
+.mini-title{font-size:var(--fs-sm);font-weight:600;color:var(--muted);margin:10px 0 4px}
+.sec-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 6px;border-radius:9px;background:var(--primary-bg);color:var(--primary);font-size:var(--fs-xs);font-weight:600;margin-left:4px}
+.tiny{font-size:var(--fs-sm);color:var(--muted);padding:8px 16px 14px}
+
+/* ===== 目标卡：徽标 / 汇总行 / 状态 ===== */
+.badge{display:inline-flex;align-items:center;font-size:var(--fs-xs);font-weight:500;padding:2px 7px;border-radius:4px;flex-shrink:0;white-space:nowrap}
+.badge-done{background:var(--success-bg);color:var(--success)}
+.badge-overdue{background:var(--danger-bg);color:var(--danger)}
+.badge-today{background:var(--primary-bg);color:var(--primary)}
+.goal-line{font-size:13px;color:var(--muted);line-height:1.7;word-break:break-word}
+.goal-line b{font-weight:600}
+.goal-line b+.goal-line,.goal-line b{font-variant-numeric:tabular-nums}
+.streak-flame{display:inline-flex;align-items:center;gap:2px;color:var(--amber)}
+.streak-flame b{color:var(--amber)}
+.today-note{display:flex;align-items:center;gap:4px;font-size:var(--fs-sm);color:var(--success);margin-top:8px}
+.card.is-checked{border-color:var(--success)}
+.card.is-overdue{box-shadow:var(--shadow-overdue)}
+.plan-line{display:flex;align-items:flex-start;gap:4px;font-size:var(--fs-sm);color:var(--muted);margin-top:4px;line-height:1.5}
+.plan-line svg{flex-shrink:0;margin-top:2px}
+
+/* ===== 行内打卡表单 ===== */
+.checkin{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-top:12px;padding-top:12px;border-top:1px dashed var(--border)}
+.checkin .field{flex:1 1 96px;min-width:88px}
+.checkin .field label{display:block;font-size:var(--fs-xs);color:var(--muted);margin-bottom:4px}
+/* 固定标签颜色：里面的「5」超出了 0-1 范围，会按下拉框宽度抖动，给个固定 min-width 稳住 */
+.checkin .field select option.range-warn{color:var(--muted)}
+.checkin .field input,.checkin .field select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:16px;background:var(--field-bg);color:var(--text)}
+.checkin .field input:focus,.checkin .field select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--focus-ring)}
+/* 备注输入框：整行独占。多行文本挤在半行里根本写不下「第 12–35 页 / 重点看懂 agg 用法」，
+   而这正是备注最常见的写法。字号同样必须 16px —— 理由与其它输入框一致：
+   小于 16px 时 iOS Safari 聚焦会放大整页。resize:vertical 允许用户自己拉高，不改横向布局。 */
+.checkin .field.note-field{flex:1 1 100%}
+.checkin .field textarea{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:16px;font-family:inherit;line-height:1.55;background:var(--field-bg);color:var(--text);resize:vertical;min-height:52px}
+.checkin .field textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--focus-ring)}
+.checkin-btn{flex:0 0 100%}
+@media(min-width:560px){
+  /* ⚠️ 这里原来是 flex-wrap:nowrap（把三个短字段和按钮挤在同一行）。
+     加了备注框之后必须放开换行：nowrap 下 flex-basis:100% 的项**不会被换到新行**，
+     而是被压回 .checkin .field 的 min-width —— 线上实测只有 88px 宽，
+     也就是「整行独占」的规则写了、实际完全没生效，用户拿到的是一个写不下两行字的窄条。
+     放开换行后桌面布局变成：第一行三个短字段，第二行 = 备注框 + 打卡按钮。 */
+  .checkin{flex-wrap:wrap}
+  /* 桌面下备注框与按钮同行（basis 200 + 按钮 auto 刚好放得下），
+     不必强占 100% 再让按钮单独占一行。窄屏仍是上面那条 100%（整行独占）。 */
+  .checkin .field.note-field{flex:1 1 200px}
+  .checkin-btn{flex:0 0 auto;align-self:flex-end}
+}
+
+/* ===== 提醒卡动作区 ===== */
+.alert-card{align-items:flex-start}
+.alert-actions{display:flex;flex-direction:column;gap:6px;flex-shrink:0}
+@media(max-width:480px){
+  .alert-card{flex-direction:column;align-items:stretch}
+  .alert-actions{flex-direction:row}
+  .alert-actions .btn{flex:1}
+}
+
+/* ===== 卡片网格：桌面多栏 =====
+   网格自己用 gap 控制间距，所以网格内的卡片不再各带 margin-bottom
+   （否则「卡片间距 10px + margin 10px」会叠成 20px 的松散排布）。 */
+.card-grid{display:grid;grid-template-columns:1fr;gap:10px}
+.card-grid .card{margin-bottom:0}
+@media(min-width:1025px){.card-grid{grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px;align-items:start}}
+@media(min-width:769px) and (max-width:1024px){.card-grid{grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px;align-items:start}}
+
+/* ===== A2 本周打卡节奏 ===== */
+.rhythm{display:flex;gap:6px;padding:12px 16px 16px}
+.rhythm-day{flex:1;text-align:center;padding:8px 2px;border-radius:var(--radius-sm);background:var(--surface-2);transition:background .2s,box-shadow .2s,opacity .2s}
+.rhythm-day.hit{background:var(--primary-bg)}
+.rhythm-day.today{box-shadow:0 0 0 1.5px var(--primary)}
+.rhythm-day.future{opacity:.45}
+.rhythm-day .rd{font-size:var(--fs-xs);color:var(--muted)}
+.rhythm-day .rm{font-size:var(--fs-base);font-weight:600;line-height:1.4;color:var(--muted)}
+.rhythm-day.hit .rm{color:var(--primary)}
+.rhythm-day .rv{font-size:10px;color:var(--muted);min-height:14px;font-variant-numeric:tabular-nums}
+
+/* ===== A1-1 近 35 天热力图 =====
+   色阶全部走 --heat-* 令牌：浅色下是「白→深紫」，暗色下是「近底→亮紫」，
+   两端都能看清「哪些天有记录」，这是热力图存在的唯一意义。 */
+.heat-days{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:12px 16px 4px;font-size:10px;color:var(--muted);text-align:center}
+.heat-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:0 16px 12px}
+.heat-cell{aspect-ratio:1/1;border-radius:3px;background:var(--heat-0);min-height:0;transition:background .2s}
+.heat-cell.blank{background:transparent}
+.heat-cell.l1{background:var(--heat-1)}
+.heat-cell.l2{background:var(--heat-2)}
+.heat-cell.l3{background:var(--heat-3)}
+.heat-cell.l4{background:var(--heat-4)}
+.heat-cell.today{box-shadow:0 0 0 1.5px var(--primary)}
+.heat-legend{display:flex;align-items:center;justify-content:flex-end;gap:4px;padding:0 16px 14px;font-size:var(--fs-xs);color:var(--muted)}
+.heat-legend .heat-cell{width:12px;height:12px;aspect-ratio:auto;min-height:auto;flex-shrink:0}
+
+/* ===== A1-2 最近动态 ===== */
+.feed-row{display:flex;align-items:center;gap:8px;padding:9px 16px;font-size:13px;border-top:1px solid var(--border)}
+.feed-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.feed-main{flex:1;min-width:0;word-break:break-word}
+.feed-main b{font-weight:600}
+.feed-date{font-size:var(--fs-sm);color:var(--muted);flex-shrink:0}
+
+/* ============================================================
+   主题选择控件
+   ------------------------------------------------------------
+   两处入口，共用同一个状态：
+   ① 顶栏圆形按钮 —— 循环切换（跟随系统 → 浅色 → 深色 → …），
+      任何页面都能一键切换；
+   ② 「我的」页三段选择器 —— 三项全平铺，明确知道当前处于哪种模式。
+   两者都调用 setTheme()，状态存在 localStorage，刷新后保持。
+   ============================================================ */
+.theme-seg{display:flex;gap:6px;background:var(--surface-2);padding:5px;border-radius:var(--radius-sm);border:1px solid var(--border)}
+.theme-seg button{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px;border:1px solid transparent;background:transparent;border-radius:var(--radius-sm);cursor:pointer;color:var(--muted);font-size:var(--fs-xs);transition:background .16s,color .16s;min-height:56px}
+.theme-seg button[aria-pressed="true"]{background:var(--primary-bg);color:var(--primary);font-weight:600}
+.theme-seg button:hover:not([aria-pressed="true"]){color:var(--text)}
+/* 图标做一次轻微旋转切换，给「刚刚切了主题」一个即时反馈 */
+.theme-btn svg{transition:transform .35s ease}
+.theme-btn.spin svg{transform:rotate(180deg)}
+
+/* ============================================================
+   收尾层（必须留在样式表最后）
+   ------------------------------------------------------------
+   ⚠️ 这些规则与 `.btn` / `.btn-sm` 同权重，靠「后出现的赢」生效，
+      所以要排在它们之后。写在上面会被基础规则反压回去（静默失效）。
+   ============================================================ */
+@media(max-width:768px){
+  /* 移动端触控目标一律抬到 ≥44×44，手指点不空。
+     ⚠️ 图标类按钮（.btn-icon/.theme-btn/.modal-close）基础规则里只有 32–36px，
+        必须在这里显式抬起来；且这些选择器与上面的基础规则同权重，
+        留在最后才会生效，写前面会被静默压回去。 */
+  .btn,.btn-sm{min-height:44px}
+  .btn-icon,.theme-btn,.modal-close{min-width:44px;min-height:44px}
+  .modal-close{display:inline-flex;align-items:center;justify-content:center}
+}
+
+/* --- 目标卡（Homarr 式 widget）补充 --- */
+/* 顶部色条：圆角要与卡片外圆角严丝合缝，否则两端会露出直角 */
+.card-accent{border-radius:var(--radius) var(--radius) 0 0}
+/* 卡片头部的编辑按钮：常态低调，卡片 hover 或键盘聚焦时才完全显形。
+   移动端没有 hover，必须常驻全亮（否则手机上永远看不出这里能点）。 */
+.goal-card .btn-icon{opacity:.7}
+.goal-card:hover .btn-icon,.goal-card .btn-icon:focus-visible{opacity:1}
+@media(hover:none){.goal-card .btn-icon{opacity:1}}
+
+/* 分组标题里的文字块：图标 + 文案 + 徽标做成一整块，不被右侧细线挤散 */
+.section-title span{display:inline-flex;align-items:center;gap:6px;min-width:0}
+
+/* 工具条主操作按钮：不换行、不压缩，窄屏也点得到 */
+.topbar-tools .btn{white-space:nowrap;flex-shrink:0}
+
+/* ============================================================
+   按钮动效层（同样必须留在样式表最后）
+   ------------------------------------------------------------
+   取自《前端按钮动效风格参考》（20 条），只挑了 5 条 + 1 处加强，
+   挑选标准：① 触屏也吃得到（本工作台大量在手机上用，纯 hover 的效果等于不存在）；
+             ② 不破坏 Homarr 式克制（小圆角 / 1px 描边 / 主色点缀 /
+                **常态无阴影**），所以参考里的悬浮抬升、有机形变、3D 翻转、
+                粒子爆发、液体填充这类展览型效果全部不要 ——
+                参考里的 Shadow Lift 尤其不能用：它靠投影造层级，
+                而本工作台刚把「层次交给描边、阴影只留给模态和 toast」定为规范。
+
+   ⚠️ 下面全部用 currentColor + opacity 实现，**不新增任何颜色令牌** ——
+      这样浅色 / 深色两套皮自动都是对的，不必再维护一组「动效专用色」。
+   ⚠️ 这些规则与上面的 .btn 基础规则同权重，靠「后出现的赢」生效，所以要留在最后。
+   ============================================================ */
+
+/* —— 1 / Press Scale 按压缩放（参考 01-04）
+      替换原来生硬的 transform:scale(.98)：换成弹簧曲线做
+      「悬停轻抬 → 按下压扁 → 松开回弹」。这是全站按钮的基础触感，触屏也吃得到。 —— */
+.btn,.btn-icon,.theme-btn,.modal-close{
+  transition:transform var(--motion-press) var(--ease-spring),
+             background-color var(--motion-quick) var(--ease-std),
+             color var(--motion-quick) var(--ease-std),
+             border-color var(--motion-quick) var(--ease-std),
+             box-shadow var(--motion-quick) var(--ease-std);
+  -webkit-tap-highlight-color:transparent;
+}
+/* ⚠️ 「悬停放大」这半条要用 (hover:hover) 兜住：触屏没有真 hover，
+   手指点完按钮会「粘」在 :hover 上，那颗按钮会一直比旁边大一圈。
+   （下面 Fill Sweep 的扫入同理，也必须包在这个查询里。） */
+@media(hover:hover){
+  .btn:hover,.btn-icon:hover,.theme-btn:hover,.modal-close:hover{transform:scale(1.03)}
+}
+.btn:active,.btn-icon:active,.theme-btn:active,.modal-close:active{transform:scale(.95)}
+
+/* —— 2 / Ripple Click 涟漪点击（参考 02-01）
+      只给「实色按钮」：这类按钮本身就是全站主操作（打卡 / 保存 / 新建），
+      点下去立刻有一圈墨色扩散，写库那几百毫秒里不会觉得「点了没反应」。
+      描边按钮走下面的 Fill Sweep，两者不叠加，免得花。 —— */
+.ripple{
+  position:absolute;z-index:1;border-radius:50%;pointer-events:none;
+  background:currentColor;opacity:0;
+  transform:translate(-50%,-50%) scale(0);
+  animation:rippleOut var(--motion-long) var(--ease-std) forwards;
+}
+@keyframes rippleOut{
+  0%{opacity:.20;transform:translate(-50%,-50%) scale(0)}
+  70%{opacity:.10}
+  100%{opacity:0;transform:translate(-50%,-50%) scale(1)}
+}
+
+/* —— 3 / Fill Sweep 颜色扫入（参考 01-01）
+      描边按钮（次要操作）的悬停提示：底色从左往右扫进来，方向感明确。 —— */
+.btn-outline::before{
+  content:'';position:absolute;inset:0;z-index:0;
+  background:currentColor;opacity:.10;
+  transform:scaleX(0);transform-origin:left center;
+  transition:transform var(--motion-quick) var(--ease-std);
+}
+@media(hover:hover){
+  .btn-outline:hover::before{transform:scaleX(1)}
+}
+
+/* —— 4 / Loading Morph 加载形变 · 简化版（参考 03-01）
+      写库期间把按钮内容换成环形 spinner。**这一条不只是好看**：
+      doCheckin 原先只 disable 了输入框、没锁按钮，网络慢时连点两下
+      会写进两条重复打卡。加了 .is-busy 后按钮 pointer-events:none，重复提交被堵死。
+      ⚠️ 刻意不做参考里「收缩成圆」的宽度形变：`.checkin-btn` 在窄屏是
+         flex-basis:100%，拿 width 做形变会被 flex 压回来，反而跳一下。
+         所以尺寸不动、只换内容 —— 两种屏幕都不会抖。 —— */
+.btn.is-busy{pointer-events:none;cursor:default}
+.btn.is-busy::after{
+  content:'';position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;
+  border-radius:50%;border:2px solid transparent;
+  animation:sgtSpin var(--motion-long) linear infinite;
+}
+@keyframes sgtSpin{to{transform:rotate(360deg)}}
+/* color:transparent 一次把文字和 SVG 图标都藏掉（本项目图标全用 currentColor 描边），
+   比逐个 opacity 稳 —— 按钮里的文字是**裸文本节点**，选择器根本选不到它。 */
+.btn-primary.is-busy,.btn-success.is-busy,.btn-danger.is-busy,.btn-amber.is-busy,.btn-outline.is-busy{color:transparent}
+.btn-primary.is-busy::after{border-color:var(--on-primary);border-top-color:transparent}
+.btn-success.is-busy::after,.btn-danger.is-busy::after,.btn-amber.is-busy::after{border-color:var(--on-solid);border-top-color:transparent}
+.btn-outline.is-busy::after{border-color:var(--primary);border-top-color:transparent}
+
+/* —— 5 / Success Pop 成功回弹（参考 03-02 的按钮版）
+      打卡写成功后，那颗按钮弹一下 —— 彩带是页面级庆祝，
+      这个是「你刚点的那颗按钮，事成了」的局部确认，两者互补。
+      ⚠️ 只在那一次渲染播放：门禁（S._popId）由 doCheckin 给、renderGoalCard
+         消费一次即清。若写成「只要是绿色按钮就播」，每次刷新重渲染都会重播，
+         会变成一颗一直在闪的按钮 —— 破坏性最小的错法，但很难查。 —— */
+.checkin-btn.is-success{animation:successPop var(--motion-morph) var(--ease-spring)}
+@keyframes successPop{
+  0%{transform:scale(1)}
+  40%{transform:scale(1.06)}
+  70%{transform:scale(.97)}
+  100%{transform:scale(1)}
+}
+
+/* —— 6 / 键盘聚焦环加强（从参考 02-02 光晕里只取静态版）
+      工作台是长时间停留的界面，参考里 800ms 的无限呼吸光晕会一直抢注意力，
+      所以不做循环动画，只把聚焦环描清楚。 —— */
+.btn:focus-visible,.btn-icon:focus-visible,.theme-btn:focus-visible,.modal-close:focus-visible{
+  outline:2px solid var(--primary);outline-offset:2px;
+}
+</style>
+<script>
+/* ============================================================
+   主题引导（必须同步、且必须在 <body> 之前执行）
+   ------------------------------------------------------------
+   为什么不能等 DOMContentLoaded：那样浏览器会先按浅色把首屏画出来，
+   再跳到深色，用户看到明显的白屏闪烁（FOUC）。
+   这里在解析到 head 时就定下 <html data-theme>，首帧即为正确主题。
+   ============================================================ */
+(function(){
+  var KEY='sgt_theme_v1';
+  var MIGRATED='sgt_theme_default_dark_v1';
+  var mode=null;
+  try{mode=localStorage.getItem(KEY)}catch(e){}
+  if(mode!=='light'&&mode!=='dark'&&mode!=='auto')mode=null;
+
+  /* 默认值由「跟随系统」改为「深色」（对齐 Homarr 那套深色仪表盘观感）。
+     ⚠️ 这里必须是一次性迁移，用一个独立的迁移标记做门禁，不能每次打开都按默认值纠正：
+        否则用户主动选了「跟随系统」之后，下次进来又被重置成深色，那个选项等于失效
+        （本页踩过的「静默失效」类问题，不能再犯一次）。
+     迁移规则：从未主动钉死过主题（存的是 auto 或压根没存过）→ 落到新默认「深色」；
+              已经明确选过 light / dark 的，原样保留。 */
+  var migrated=false;
+  try{migrated=localStorage.getItem(MIGRATED)==='1'}catch(e){}
+  if(!migrated){
+    if(mode!=='light'&&mode!=='dark')mode='dark';
+    try{localStorage.setItem(KEY,mode);localStorage.setItem(MIGRATED,'1')}catch(e){}
+  }
+  /* localStorage 不可读（隐私模式）时的兜底 */
+  if(mode!=='light'&&mode!=='dark'&&mode!=='auto')mode='dark';
+  var eff=mode;
+  if(mode==='auto'){
+    eff=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';
+  }
+  var root=document.documentElement;
+  root.setAttribute('data-theme',eff);
+  root.setAttribute('data-theme-mode',mode);
+  /* 供主脚本读取，避免它再去判断一次（也避免第二次读 localStorage 抛错） */
+  window.__sgtTheme={key:KEY,mode:mode,eff:eff};
+})();
+</script>
+</head>
+<body>
+<div id="app">
+  <div class="sidebar" id="sidebar">
+    <div class="app-header">
+      <!-- 品牌标记：2×2 圆角方块，用品牌色令牌着色 —— 取代原来的单色线框图标，
+           顺带把「这是一个仪表盘」的信号给出来。 -->
+      <svg class="brand-mark" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="1" y="1" width="10" height="10" rx="2.5" fill="var(--primary)"/>
+        <rect x="13" y="1" width="10" height="10" rx="2.5" fill="var(--primary-l)"/>
+        <rect x="1" y="13" width="10" height="10" rx="2.5" fill="var(--primary-l)"/>
+        <rect x="13" y="13" width="10" height="10" rx="2.5" fill="var(--primary)"/>
+      </svg>
+      <span class="brand-name">学习目标管理台</span>
+      <!-- 同步状态 + 主题切换：窄屏就在这一行；桌面端整套搬到内容区的吸顶工具条上。
+           两处是独立 DOM，共用 js-* 类名，JS 同时更新两处，
+           不会出现「只有一处被更新」的半死状态。 -->
+      <div class="header-tools">
+        <span class="sync-badge syncing js-sync-badge"></span>
+        <button class="theme-btn js-theme-btn" type="button" onclick="cycleTheme()" aria-label="切换主题" title="切换主题"></button>
+      </div>
+    </div>
+    <nav class="nav" id="nav" role="tablist" aria-label="主导航">
+      <button class="nav-item active" data-tab="today" role="tab" id="tabbtn-today" aria-selected="true" aria-controls="tab-today">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"/></svg>
+        <span>今日打卡</span>
+      </button>
+      <button class="nav-item" data-tab="dashboard" role="tab" id="tabbtn-dashboard" aria-selected="false" aria-controls="tab-dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/></svg>
+        <span>进度看板</span>
+      </button>
+      <button class="nav-item" data-tab="weekly" role="tab" id="tabbtn-weekly" aria-selected="false" aria-controls="tab-weekly">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></svg>
+        <span>周报复盘</span>
+      </button>
+      <button class="nav-item" data-tab="mine" role="tab" id="tabbtn-mine" aria-selected="false" aria-controls="tab-mine">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span>我的</span>
+      </button>
+    </nav>
+    <!-- 侧栏底部（仅桌面可见）：窄屏有底部 Tab，不需要这一块 -->
+    <div class="sidebar-foot">
+      <button class="btn btn-outline btn-sm btn-block" type="button" onclick="manualSync()">重新同步</button>
+      <div class="sidebar-note">数据保存在线上资料库，多设备自动同步。</div>
+    </div>
+  </div>
+  <main class="content" id="content">
+    <!-- 吸顶工具条（Homarr 式内容区头部）：当前模块 + 同步状态 + 主题 + 主操作。
+         标题与主操作按钮随 Tab 切换由 updateTopbar() 更新，DOM 本身是静态的，
+         不会被各 Tab 的 innerHTML 覆盖掉。 -->
+    <header class="topbar">
+      <div class="topbar-title">
+        <span id="topbar-icon" aria-hidden="true"></span>
+        <h1 id="topbar-title">今日打卡</h1>
+      </div>
+      <div class="topbar-tools">
+        <span class="sync-badge syncing js-sync-badge" role="status" aria-live="polite"></span>
+        <button class="theme-btn js-theme-btn" type="button" onclick="cycleTheme()" aria-label="切换主题" title="切换主题"></button>
+        <button class="btn btn-primary btn-sm" id="topbar-action" type="button">新建目标</button>
+      </div>
+    </header>
+    <div id="tab-today" class="tab-panel active" role="tabpanel" aria-labelledby="tabbtn-today"></div>
+    <div id="tab-dashboard" class="tab-panel" role="tabpanel" aria-labelledby="tabbtn-dashboard"></div>
+    <div id="tab-weekly" class="tab-panel" role="tabpanel" aria-labelledby="tabbtn-weekly"></div>
+    <div id="tab-mine" class="tab-panel" role="tabpanel" aria-labelledby="tabbtn-mine"></div>
+  </main>
+</div>
+<div class="modal-overlay hidden" id="modal-overlay">
+  <div class="modal-content" id="modal-content"></div>
+</div>
+<div class="toast hidden" id="toast"></div>
+<div id="confetti-container"></div>
+
+<script>
+(function(){
+'use strict';
+
+/* ====== Constants ====== */
+var DATABASE_ID='OereifjY46k3XWmQX6KVfK';
+
+/* 目标配色表。
+   ⚠️ 这里存的是 CSS 变量引用（var(--gc-xxx)）而不是十六进制色值。
+   原因：颜色若写死在 JS 里，切换主题就必须重新渲染整页才能换色；
+   交给 CSS 令牌后，切主题只是 <html data-theme> 变一次，所有目标卡即时变色。
+   令牌本体在上方样式表的 :root 与 [data-theme="dark"] 里，两处都要有；
+   末尾带兜底值，万一某个令牌漏定义也会退回品牌色，而不是变成透明。 */
+var COLOR_KEYS=['purple','blue','green','orange','pink','teal'];
+var COLORS={};
+COLOR_KEYS.forEach(function(k){
+  COLORS[k]={
+    p:'var(--gc-'+k+',var(--primary))',      /* 色块用：色点 / 进度条 / 左侧色条 / 图表柱 */
+    ink:'var(--gci-'+k+',var(--primary))',   /* 文字用：完成量 / 剩余量 / 建议量 / 完成率 */
+    l:'var(--gcl-'+k+',var(--primary-l))',
+    bg:'var(--gcbg-'+k+',var(--primary-bg))'
+  };
+});
+
+/* ====== 主题：浅色 / 深色 / 跟随系统 ======
+   设计要点：
+   · 「选择值」与「实际值」分开。用户选 auto 时，实际显示由系统偏好决定；
+     这两个值必须能分别读到，否则顶栏按钮无法说清「现在是跟随系统」还是「钉死了深色」。
+   · 主题只作用于 <html data-theme>，颜色全部由 CSS 令牌派生，
+     所以切换不需要重新渲染任何内容，也不会打断用户正在填的表单。
+   · 首屏由 head 里的同步脚本先定好，这里只负责后续切换与控件状态同步。 */
+var THEME_KEY='sgt_theme_v1';
+/* 这个数组的顺序就是「点顶栏按钮时的轮换顺序」，把默认的深色放在首位：
+   深色 → 浅色 → 跟随系统 → 深色… */
+var THEME_MODES=['dark','light','auto'];
+var THEME_ICON={light:'sun',dark:'moon',auto:'auto'};
+var THEME_NAME={light:'浅色',dark:'深色',auto:'跟随系统'};
+var _themeMode=(window.__sgtTheme&&window.__sgtTheme.mode)||null;
+var _mql=(window.matchMedia?window.matchMedia('(prefers-color-scheme: dark)'):null);
+
+function themeMode(){
+  if(_themeMode)return _themeMode;
+  var m=null;
+  try{m=localStorage.getItem(THEME_KEY)}catch(e){}
+  /* 兜底默认值同样是「深色」，与 head 里的引导脚本保持一致：
+     两处若不一致，会出现「首帧深色、脚本接管后跳浅色」的闪跳。 */
+  if(m!=='light'&&m!=='dark'&&m!=='auto')m='dark';
+  _themeMode=m;
+  return m;
+}
+/* 选择值 → 实际生效值 */
+function themeEffective(){
+  var m=themeMode();
+  if(m==='auto')return(_mql&&_mql.matches)?'dark':'light';
+  return m;
+}
+/* 唯一的主题应用入口：改属性、存偏好、同步两个控件的显示。
+   传 mode 表示「用户做了选择」，不传表示「按当前选择重算一遍」。 */
+function applyTheme(mode){
+  if(mode!==undefined){
+    if(THEME_MODES.indexOf(mode)<0)return themeEffective();
+    _themeMode=mode;
+    try{localStorage.setItem(THEME_KEY,mode)}catch(e){}
+  }
+  var m=themeMode(),eff=themeEffective();
+  var root=document.documentElement;
+  root.setAttribute('data-theme',eff);
+  root.setAttribute('data-theme-mode',m);
+  /* 移动端地址栏配色：取顶栏渐变的起始色。页面最顶端就是顶栏，
+     这样地址栏与页面在视觉上是连成一片的。色值从令牌里读，
+     不在这里写死十六进制，否则改样式时这里会悄悄脱钩。 */
+  var meta=document.getElementById('theme-color');
+  if(meta){
+    var hf=getComputedStyle(root).getPropertyValue('--header-from').trim();
+    if(hf)meta.setAttribute('content',hf);
+  }
+  /* 主题按钮：现在页面上有两处（窄屏的品牌条 + 桌面的工具条），
+     按 js-theme-btn 类名一次性更新，不能再用 getElementById —— 那只会更新其中一个，
+     另一个就永远停在初始的空图标上。 */
+  var btns=document.querySelectorAll('.js-theme-btn');
+  var btnTitle='';
+  for(var bi=0;bi<btns.length;bi++){
+    var nxt=THEME_MODES[(THEME_MODES.indexOf(m)+1)%THEME_MODES.length];
+    btnTitle='当前主题：'+THEME_NAME[m]+(m==='auto'?('（系统为'+THEME_NAME[eff]+'）'):'')+'，点击切换到'+THEME_NAME[nxt];
+    btns[bi].innerHTML=ic(THEME_ICON[eff],18);
+    btns[bi].title=btnTitle;
+    btns[bi].setAttribute('aria-label',btnTitle);
+  }
+  /* 「我的」页三段选择器：每次重渲染都会重建 DOM，所以这里重新同步选中态 */
+  var seg=document.getElementById('theme-seg');
+  if(seg){
+    var bs=seg.querySelectorAll('button');
+    for(var i=0;i<bs.length;i++){
+      bs[i].setAttribute('aria-pressed',bs[i].getAttribute('data-mode')===m?'true':'false');
+    }
+  }
+  return eff;
+}
+window.setTheme=function(mode){applyTheme(mode)};
+window.cycleTheme=function(){
+  var i=THEME_MODES.indexOf(themeMode());
+  applyTheme(THEME_MODES[(i+1)%THEME_MODES.length]);
+  /* 转一下图标，给「确实切换了」一个即时反馈 —— 深浅两色差在小屏上不够醒目 */
+  var btns=document.querySelectorAll('.js-theme-btn');
+  for(var bi=0;bi<btns.length;bi++){(function(b){b.classList.add('spin');setTimeout(function(){b.classList.remove('spin')},420)})(btns[bi])}
+};
+window.currentTheme=function(){return{选择:themeMode(),实际:themeEffective()}};
+/* 跟随系统时，系统改了主题要立刻反映，而不是等用户下次刷新 */
+if(_mql){
+  var _onSysChange=function(){if(themeMode()==='auto')applyTheme()};
+  if(_mql.addEventListener)_mql.addEventListener('change',_onSysChange);
+  else if(_mql.addListener)_mql.addListener(_onSysChange);
+}
+
+/* ====== State ====== */
+var S={
+  goals:[],checkins:[],weeklies:[],
+  tab:'today',sync:'loading',lastSync:null,
+  weekOffset:0,editGoalId:null,schemaOpts:{},weekCtx:null,
+  readonly:false,             /* 匿名/未登录：平台只放开读，写操作返回 401 not login */
+  _popId:null                 /* 按钮成功回弹的一次性门禁：doCheckin 写入，renderGoalCard 消费一次即清 */
+};
+
+var LEFT_KEY='sgt_left_v1';   /* 未登录时用户已填内容的暂存位（写成功即清） */
+var _leftLogin=false;
+
+var db=null;
+function initDB(){db=window.__SMART_PAGE__&&window.__SMART_PAGE__.database;return !!db}
+var _dbRetryCount=0;
+window.addEventListener('message',function(e){
+  if(initDB()&&S.sync!=='synced'&&S.sync!=='syncing'){_dbRetryCount=0;loadAll()}
+});
+
+/* ====== 只读模式 / 未登录暂存 ======
+   平台权限模型：匿名可 query，写操作（addRecord / updateRecord / deleteRecord）返回 401 not login。
+   未登录点提交时平台会跳登录并整页重载，内存里的输入会全部丢失，所以先把用户填的内容
+   落到 localStorage，登录回来后自动填回，用户不用重填一遍。 */
+function markReadonly(err){
+  var m=String((err&&err.message)||err||'');
+  if(m.indexOf('401')>=0||m.indexOf('not login')>=0||m.toLowerCase().indexOf('login')>=0){S.readonly=true;return true}
+  if(/^\{\}$/.test(m))S.readonly=true;      /* SDK 部分错误会把 body 序列化成 {} 丢掉 msg */
+  return false;
+}
+function saveLeftover(obj){
+  try{localStorage.setItem(LEFT_KEY,JSON.stringify(obj))}catch(e){}
+}
+function readLeftover(){
+  try{
+    var raw=localStorage.getItem(LEFT_KEY);if(!raw)return null;
+    /* 只认 24 小时内的暂存，避免陈年残留把今天填的内容顶掉 */
+    var o=JSON.parse(raw);
+    if(!o||!o.t||Date.now()-o.t>86400000){localStorage.removeItem(LEFT_KEY);return null}
+    if(o.date&&o.date!==todayKey()){localStorage.removeItem(LEFT_KEY);return null}
+    return o;
+  }catch(e){return null}
+}
+function clearLeftover(){try{localStorage.removeItem(LEFT_KEY)}catch(e){}}
+
+/* 登录页 href 必须基于 window.top.location.href（站点根路径），不能只用 iframe 自身 URL */
+function buildLoginHref(){
+  var base='https://workbuddy.link/login?redirect=';
+  var target;
+  try{target=window.top.location.href}catch(e){target=location.href}
+  try{return base+encodeURIComponent(target)}catch(e){return base+encodeURIComponent(location.href)}
+}
+
+/* 全站统一的「需要登录」提示：黄色告警条，不用瞬时 toast（写操作会触发整页跳转，toast 必丢） */
+function needLoginNoticeHtml(){
+  return '<div class="alert-card yellow" style="margin-bottom:12px">'+
+    '<div class="alert-text">'+ic('lock',16)+
+    '<strong>只读模式 · 需要登录才能保存</strong>'+
+    '<span style="display:block;font-size:12px;color:var(--muted)">当前是匿名访问，能看数据但存不了。点右侧登录，回来会自动填回你刚才填的内容。</span>'+
+    '</div>'+
+    '<div class="alert-actions"><button class="btn btn-outline btn-sm" onclick="goLogin()">去登录</button></div>'+
+    '</div>';
+}
+window.goLogin=function(){
+  /* 未登录提交后内容在内存里，跳登录会丢；这里再兜一次，防止用户自己点「去登录」 */
+  try{saveLeftover(readFormSnapshot()||{})}catch(e){}
+  location.href=buildLoginHref();
+};
+/* 只读模式下点打卡按钮：不假装写入，直接说清楚要去登录，并把已填内容先存下来 */
+window.confirmLoginToCheckin=function(goalId){
+  var snap=readFormSnapshot();
+  if(snap)saveLeftover(snap);
+  var g=goalById(goalId);
+  var prefix=g?('「'+g['目标名称']+'」'):'';
+  showToast(prefix+'需要先登录才能保存'+(snap?'，已暂存填好的内容':''),'error');
+  setTimeout(function(){location.href=buildLoginHref()},900);
+};
+function readFormSnapshot(){
+  var o={t:Date.now(),date:todayKey(),forms:{}};
+  document.querySelectorAll('#tab-today .checkin').forEach(function(f){
+    var amt=f.querySelector('input[id^=amt_]'),min=f.querySelector('input[id^=min_]'),sel=f.querySelector('select[id^=date_]'),nt=f.querySelector('textarea[id^=note_]');
+    if(!amt)return;
+    var gid=amt.id.slice(4);
+    /* 只有数量为空**且**备注也为空时才跳过。
+       原来是「数量为空就跳过」，但只读模式下那颗「登录后打卡」按钮并不校验数量就能点，
+       用户很可能先写了备注、数量还没填就去登录 —— 那种情况下刚写的那段字更该保住。 */
+    if(amt.value===''&&(!nt||nt.value===''))return;
+    o.forms[gid]={amt:amt.value,min:min?min.value:'',date:sel?sel.value:o.date,note:nt?nt.value:''};
+  });
+  return Object.keys(o.forms).length?o:null;
+}
+
+/* ====== Date Utils ====== */
+function dkey(d){var y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');return y+'-'+m+'-'+dd}
+function todayKey(){return dkey(new Date())}
+/* 库里 date 字段读回来是 ISO UTC（"2026-12-31T00:00:00Z"），直接 new Date() 在东八区
+   会得到当天 08:00 —— 一旦落在午夜边缘就会整体偏移一天。所以先截出日期部分按本地时间造 Date。
+   注意不能只判断「以 Z 结尾」：不带 Z 的裸 ISO（"2026-12-31T00:00:00"）在多数引擎里也按 UTC 解析，
+   同样会偏。判据取「有 T 就取日期段」，最稳。
+   ⚠️ 空值绝不能再回退成 new Date()：那会把「字段没存上」伪装成「截止日是今天」，
+   连带 getRemainingDays 算出 0 → 建议量变成「剩余全部一次完成」，且完全不报错。
+   现在返回 Invalid Date，由调用方用 isInvalid() 兜住。 */
+function parseDate(s){
+  if(s instanceof Date)return s;
+  if(s===null||s===undefined||s==='')return new Date(NaN);
+  var str=String(s).trim();
+  if(!str)return new Date(NaN);
+  if(str.indexOf('T')>=0)str=str.split('T')[0];        /* "2026-12-31T00:00:00Z" → "2026-12-31" */
+  var m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(str);
+  if(m)return new Date(+m[1],+m[2]-1,+m[3]);           /* 按本地时间造，不涉时区转换 */
+  var d=new Date(str);
+  return d;
+}
+function isInvalid(d){return !d||isNaN(d.getTime())}
+/* 用户没填 / 字段没存上时的兜底标记，界面据此显示「未设置」而不是编一个日期 */
+function hasDeadline(g){return !isInvalid(parseDate(g&&g['截止日期']))}
+function daysBetween(d1,d2){return Math.round((d2-d1)/(86400000))}
+function addDays(d,n){var r=new Date(d);r.setDate(r.getDate()+n);return r}
+function weekStart(d){var r=new Date(d);r.setHours(0,0,0,0);var day=r.getDay()||7;r.setDate(r.getDate()-day+1);return r}
+function fmtDate(s){var d=parseDate(s);if(isInvalid(d))return'未设置';return(d.getMonth()+1)+'月'+d.getDate()+'日'}
+function fmtDateShort(s){var d=parseDate(s);if(isInvalid(d))return'未设置';return d.getMonth()+1+'/'+d.getDate()}
+/* 兜一层：d 无效时别返回 undefined（会被拼成「周undefined」这种脏文案） */
+function weekDay(d){if(isInvalid(d))return'';return['日','一','二','三','四','五','六'][d.getDay()]}
+/* 月份首日的第 3 个字符会落进该月首格，所以下划线前要补一个全角空格占位 */
+function fmtMonthNum(d){var m=d.getMonth()+1;return(m>=10?String(m):'\u3000'+m)+'\u200a月'}
+
+/* ====== SVG Icons ====== */
+function ic(n,s){var w=s||20;var P={
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  check:'<path d="M20 6L9 17l-5-5"/>',
+  trash:'<path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>',
+  edit:'<path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4z"/>',
+  sync:'<path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>',
+  clock:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  fire:'<path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.5-.5-2-1-3-1.5-1.5-1-2.5-1-4a4 4 0 00-4 4c0 3 2 5 2 7a4 4 0 008 0c0-3-2-5-2-7"/>',
+  target:'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+  chevL:'<path d="M15 18l-6-6 6-6"/>',
+  chevR:'<path d="M9 18l6-6-6-6"/>',
+  alert:'<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/>',
+  flag:'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22V15"/>',
+  list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  book:'<path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>',
+  play:'<polygon points="5 3 19 12 5 21 5 3"/>',
+  settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>',
+  download:'<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/>',
+  close:'<path d="M18 6L6 18M6 6l12 12"/>',
+  calendar:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>',
+  lock:'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>',
+  /* 导航 / 吸顶工具条的模块图标（与侧栏 nav 里的内联 SVG 同一套 path，
+     工具条标题换 Tab 时从这里取，避免两处画得不一样） */
+  grid:'<path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/>',
+  report:'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/>',
+  user:'<path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  /* 主题三态图标：太阳=浅色、月亮=深色、半明半暗=跟随系统 */
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+  moon:'<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>',
+  auto:'<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 000 18z" fill="currentColor" stroke="none"/>',
+  /* 学习备注（第十二阶段）：便签形态，用在「学习日志」卡标题与每条备注行上 */
+  note:'<path d="M4 4h11l5 5v11a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2z"/><path d="M15 4v5h5"/><path d="M8 13h8M8 17h5"/>'
+};
+return'<svg width="'+w+'" height="'+w+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+(P[n]||'')+'</svg>'}
+
+/* 文本转义：所有来自数据库的字符串在拼进 innerHTML 前必须过这里 */
+function esc(s){
+  if(s===null||s===undefined)return'';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+/* 属性值转义（用于 value="..." 场景，和 esc 同源但语义独立） */
+function escAttr(s){return esc(s)}
+/* 取首字做目标头像。用 Array.from 而不是 s.charAt(0)：
+   目标名若是 emoji 或生僻字（代理对），charAt 会取到半个字符，渲染出乱码方块。 */
+function firstChar(s){
+  var t=String(s===null||s===undefined?'':s).trim();
+  if(!t)return '#';
+  var arr=Array.from(t);
+  return arr.length?arr[0]:'#';
+}
+
+/* ====== Data Loading ====== */
+var _isLoading=false;
+var _allowRestore=false;      /* 只有「首次拿到数据的渲染」才允许填回未登录暂存，见 restoreLeftoverToForms */
+function loadAll(){
+  if(_isLoading)return;
+  _isLoading=true;
+  S.sync='syncing';updateSyncBadge();
+  if(!initDB()){
+    _isLoading=false;
+    if(_dbRetryCount<20){_dbRetryCount++;S.sync='loading';updateSyncBadge();renderAll();setTimeout(loadAll,500);return}
+    S.sync='offline';updateSyncBadge();renderAll();return
+  }
+  _dbRetryCount=0;
+  db.getSchema({databaseId:DATABASE_ID}).then(function(schema){
+    (schema.properties||[]).forEach(function(f){
+      if(f.type==='select'&&f.config&&f.config.options)S.schemaOpts[f.name]=f.config.options;
+    });
+    return Promise.all([
+      db.query({databaseId:DATABASE_ID,pageSize:500}),
+      db.query({databaseId:'DRuD6oQI5lrK5IhZQS1fzn',pageSize:500}),
+      db.query({databaseId:'kVj8GOSzCqSOUhes5vYBhg',pageSize:500})
+    ]);
+  }).then(function(res){
+    _isLoading=false;
+    S.goals=res[0].results||[];
+    S.checkins=res[1].results||[];
+    S.weeklies=res[2].results||[];
+    S.goals.sort(function(a,b){return parseDate(b['创建日期'])-parseDate(a['创建日期'])});
+    S.checkins.sort(function(a,b){return parseDate(b['日期'])-parseDate(a['日期'])});
+    S.weeklies.sort(function(a,b){return parseDate(b['周开始日期'])-parseDate(a['周开始日期'])});
+    /* 数据整体换了一茬，孤儿索引必须作废重算 —— 否则会拿上一轮的索引去判新数据，
+       表现为「刚删的目标其记录还没被排除」或反过来把有效记录当孤儿。 */
+    S._orphanIdx=null;S._orphanIdxFor=null;
+    S.sync='synced';S.lastSync=new Date();
+    updateSyncBadge();_allowRestore=true;renderAll();_allowRestore=false;
+  }).catch(function(err){
+    _isLoading=false;
+    console.error('[db] load failed:',err);
+    S.sync='offline';updateSyncBadge();renderAll();
+    showToast('数据加载失败，可点击重新同步重试','error');
+  });
+}
+
+/* ====== Calculations ====== */
+/* 数值格式化：去掉浮点噪声，整数不显示 .0 */
+function trimNum(n){
+  if(n===null||n===undefined||isNaN(n))return'0';
+  var r=Math.round(Number(n)*10)/10;
+  return (Math.abs(r-Math.round(r))<1e-9)?String(Math.round(r)):r.toFixed(1);
+}
+/* 单位与「分钟数」的换算提示。
+   ⚠️ 为什么需要它：目标单位如果是「小时」，用户填「本次完成 1 小时 + 用时 60 分钟」时，
+      界面并排渲染成「+1 小时 60分」，看起来像同一件事说了两遍、甚至像「60 分钟没被识别」。
+      其实两个字段各自都对（数量=1小时，用时=60分钟），只是**单位不同却并排显示**，
+      读者会下意识把它们当成同一量纲去对账。
+      所以：当目标单位本身是时间单位时，在分钟后面补一个「= X 小时」的换算，
+      让「60分」和「1 小时」的关系一眼可见，不再像矛盾数据。 */
+function minUnitHint(unit,mins){
+  if(!mins||mins<=0)return'';
+  var u=String(unit||'').trim();
+  if(u!=='小时'&&u!=='h'&&u!=='H'&&u!=='时')return'';
+  var h=mins/60;
+  return ' (= '+trimNum(h)+' 小时)';
+}
+
+function goalCheckins(gid){
+  /* 容错：允许传入目标对象，内部统一取 record_id，避免调用方传错形态导致静默返回空数组 */
+  if(gid&&typeof gid==='object')gid=gid._id;
+  return S.checkins.filter(function(c){return c['目标ID']===gid});
+}
+/* 找出「目标已经不在了」的打卡记录：目标ID 为空，或指向一个已删除的目标。
+   典型来源：示例目标被删除后，它的打卡记录仍留在表里；
+            或目标ID 字段写空（字段类型不匹配时的静默丢弃）。
+   这类记录不属于任何现存目标，界面上没有入口能看到它，
+   但会混进按日期统计的数字里（周报投入量、打卡天数等），让数对不上。
+   ⚠️ 定义放在这里而不是 clearExamples 旁边：loadAll 之后就要用它做自检，
+      函数声明提升能保证「先调用后定义」也正常，但放前面可读性更好。 */
+function findOrphanCheckins(){
+  var alive={};
+  S.goals.forEach(function(g){if(g&&g._id)alive[g._id]=true});
+  return S.checkins.filter(function(r){return !r['目标ID']||!alive[r['目标ID']]});
+}
+/* 单条判定版。findOrphanCheckins 是每次过滤都重建索引（O(n) 建表 + O(m) 扫），
+   在逐日循环里（周报 7 天 × 每天扫全表）反复调用太亏，这里单独给一条快捷判断。
+   索引缓存在 S 上，loadAll 换数据时清掉（见 loadAll 里的 _orphanIdx 复位）。 */
+function orphanIndex(){
+  if(S._orphanIdx&&S._orphanIdxFor===S.goals)return S._orphanIdx;
+  var alive={};
+  S.goals.forEach(function(g){if(g&&g._id)alive[g._id]=true});
+  var idx={};
+  S.checkins.forEach(function(r){if(!r['目标ID']||!alive[r['目标ID']])idx[r._id]=true});
+  S._orphanIdx=idx;S._orphanIdxFor=S.goals;
+  return idx;
+}
+function isOrphanCheckin(c){return !!c&&!!orphanIndex()[c._id]}
+function goalTotal(gid){var t=0;goalCheckins(gid).forEach(function(c){t+=(c['数量']||0)});return t}
+function goalTodayTotal(gid){
+  var tk=todayKey();var t=0;
+  goalCheckins(gid).forEach(function(c){if(dkey(parseDate(c['日期']))===tk)t+=(c['数量']||0)});
+  return t;
+}
+function getRemaining(g){return Math.max(0,(g['总量']||0)-goalTotal(g._id))}
+/* 没设截止日（或字段没存上）时返回 null，而不是 0 —— 0 会被下游当成「就是今天到期」，
+   直接把建议量撑成「剩余全部一次完成」。调用方必须显式处理 null。 */
+function getRemainingDays(g){
+  var dl=parseDate(g['截止日期']);
+  if(isInvalid(dl))return null;
+  dl.setHours(0,0,0,0);
+  var today=new Date();today.setHours(0,0,0,0);
+  return daysBetween(today,dl);
+}
+/* B1：建议量 = 剩余 ÷ (剩余天数+1)，含今天；保留 1 位小数。
+   无截止日 → 返回 0（不编节奏，卡片改展示「剩余」、输入框留空由用户自己填）；
+   已逾期 → 一次补完。 */
+function getTodaySuggested(g){
+  var rem=getRemaining(g);
+  if(rem<=0)return 0;
+  var daysLeft=getRemainingDays(g);
+  if(daysLeft===null)return 0;              /* 没截止日：不切分 */
+  if(daysLeft<0)return rem;                 /* 已逾期：建议一次补完 */
+  return Math.ceil(rem/Math.max(1,daysLeft+1)*10)/10;
+}
+function getCompletionRate(g){
+  var t=g['总量']||0;if(!t)return 0;
+  return Math.min(100,Math.round(goalTotal(g._id)/t*100));
+}
+
+/* 某目标在指定日期集合中的「是否休息日」：不早于目标创建日 */
+function isRestDayG(gid,dateObj,dates){
+  var g=goalById(gid);if(!g)return false;
+  var mon=weekStart(dateObj);
+  var created=parseDate(g['创建日期']);
+  /* 创建日读不出来（老数据/字段没存上）时，不要用 Invalid Date 去比大小 —— 那会让
+     start 恒等于 mon，把「目标还不存在的那几天」也算进休息日判定，凭空多出休息日。
+     退回一个极早日期，等价于不限下界，行为与修复前一致且不产生假休息日。 */
+  if(isInvalid(created))return false;
+  created.setHours(0,0,0,0);
+  var start=mon<created?created:mon;
+  var cur=new Date(start);
+  while(cur<dateObj){
+    if(!dates[dkey(cur)])return false;
+    cur=addDays(cur,1);
+  }
+  return true;
+}
+/* B3：以创建日为下界，去掉 365 硬编码 */
+function calculateStreak(gid){
+  var g=goalById(gid);if(!g)return 0;
+  var dates={};goalCheckins(gid).forEach(function(c){dates[dkey(parseDate(c['日期']))]=true});
+  var created=parseDate(g['创建日期']);
+  var cur=new Date();cur.setHours(0,0,0,0);
+  if(!dates[dkey(cur)])cur=addDays(cur,-1);      /* 今天还没打卡不视为断 */
+  var streak=0;
+  if(isInvalid(created)){
+    /* 无创建日下界：只往回数连续段，最多看 365 天，避免死循环 */
+    var guard=0;
+    while(guard++<365){
+      if(dates[dkey(cur)]){streak++;cur=addDays(cur,-1);continue}
+      if(isRestDayG(gid,cur,dates)){cur=addDays(cur,-1);continue}
+      break;
+    }
+    return streak;
+  }
+  created.setHours(0,0,0,0);
+  while(cur>=created){
+    if(dates[dkey(cur)]){streak++;cur=addDays(cur,-1);continue}
+    if(isRestDayG(gid,cur,dates)){cur=addDays(cur,-1);continue}
+    break;
+  }
+  return streak;
+}
+
+function getYesterdayStatus(gid){
+  var y=addDays(new Date(),-1);y.setHours(0,0,0,0);
+  var yk=dkey(y);
+  var has=goalCheckins(gid).some(function(c){return dkey(parseDate(c['日期']))===yk});
+  if(has)return'checked';
+  var dates={};goalCheckins(gid).forEach(function(c){dates[dkey(parseDate(c['日期']))]=true});
+  return isRestDayG(gid,y,dates)?'rest':'broken';
+}
+
+/* 昨日是否漏打卡（未完成、今天未打卡、且创建日早于昨天） */
+function missedYesterday(g){
+  if(isGoalComplete(g))return false;
+  if(hasCheckinOn(g._id,todayKey()))return false;
+  var g_created=parseDate(g['创建日期']);
+  var y=addDays(new Date(),-1);y.setHours(0,0,0,0);
+  /* 创建日缺失时不拦（宁可提示一次，也别把该提醒的目标藏起来） */
+  if(!isInvalid(g_created)){g_created.setHours(0,0,0,0);if(g_created>y)return false}
+  return !hasCheckinOn(g._id,dkey(y));
+}
+function hasCheckinOn(gid,dk){
+  return goalCheckins(gid).some(function(c){return dkey(parseDate(c['日期']))===dk});
+}
+function goalById(gid){
+  for(var i=0;i<S.goals.length;i++){if(S.goals[i]._id===gid)return S.goals[i]}
+  return null;
+}
+function isGoalComplete(g){return getRemaining(g)<=0}
+
+/* B4：预计完成日 —— 近 7 天均值推算，样本不足 3 天不出数字 */
+function getEstimatedCompletionDetail(g){
+  var today=new Date();today.setHours(0,0,0,0);
+  var start=addDays(today,-6);
+  var records=goalCheckins(g._id).filter(function(c){
+    var d=parseDate(c['日期']);d.setHours(0,0,0,0);
+    return d>=start&&d<=today;
+  });
+  var uniq={};records.forEach(function(c){uniq[dkey(parseDate(c['日期']))]=true});
+  var dayCount=Object.keys(uniq).length;
+  if(dayCount<3)return{status:'sample',days:dayCount};
+  var total=0;records.forEach(function(c){total+=(c['数量']||0)});
+  var speed=total/7;
+  if(speed<=0)return{status:'sample',days:dayCount};
+  var rem=getRemaining(g);
+  if(rem<=0)return{status:'completed'};
+  var need=Math.ceil(rem/speed);
+  var etaDate=addDays(today,need);
+  var dl=parseDate(g['截止日期']);
+  if(isInvalid(dl))return{status:'ok',date:etaDate,diff:null};   /* 无截止日：只给预计日，不比早晚 */
+  dl.setHours(0,0,0,0);
+  return{status:'ok',date:etaDate,diff:daysBetween(etaDate,dl)};
+}
+function getEstimatedCompletion(g){
+  var r=getEstimatedCompletionDetail(g);
+  if(r.status==='completed')return'completed';
+  if(r.status==='ok')return r.date;
+  return null;
+}
+
+function isOverdue(g){
+  var dl=parseDate(g['截止日期']);
+  if(isInvalid(dl))return false;              /* 没截止日就谈不上逾期 */
+  dl.setHours(23,59,59,999);
+  var today=new Date();today.setHours(0,0,0,0);
+  return today>dl&&getRemaining(g)>0;
+}
+function overdueDays(g){
+  var dl=parseDate(g['截止日期']);
+  if(isInvalid(dl))return 0;
+  dl.setHours(0,0,0,0);
+  var today=new Date();today.setHours(0,0,0,0);
+  return Math.abs(daysBetween(dl,today));
+}
+/* 近 N 天分钟数合计（全局或指定目标）
+   ⚠️ gid 为空 = 全局统计，这里必须排除孤儿记录（所属目标已被删除的打卡）。
+      否则「本周打卡节奏」的分钟数会混进早就删掉的目标，天数格子亮着、点进目标却没有，
+      数字对不上还查不出原因。传了 gid 时天然只命中该目标，不受影响。 */
+function minutesOn(gid,dk){
+  var s=0;
+  S.checkins.forEach(function(c){
+    if(gid&&c['目标ID']!==gid)return;
+    if(!gid&&isOrphanCheckin(c))return;
+    if(dkey(parseDate(c['日期']))===dk)s+=(c['分钟数']||0);
+  });
+  return s;
+}
+/* 近 N 天「打卡笔数」（全局或指定目标），排除孤儿。
+   ⚠️ 为什么需要这个：「分钟数」是选填字段，用户完全可以只填数量不填分钟。
+      而本周节奏格 / 热力图原来**只看分钟数**，于是会出现
+      「今天明明打了卡（数量 24 页），但节奏格不亮、本周已投入 0 分钟」这种自相矛盾的显示。
+      打卡这件事本身是发生了的，格子就该亮 —— 分钟数只是「额外信息」而非「是否打卡」的判据。 */
+function checkinCountOn(gid,dk){
+  var n=0;
+  S.checkins.forEach(function(c){
+    if(gid&&c['目标ID']!==gid)return;
+    if(!gid&&isOrphanCheckin(c))return;
+    if(dkey(parseDate(c['日期']))===dk)n++;
+  });
+  return n;
+}
+/* 近 N 天「总投入量」，排除孤儿。用于在没填分钟时也能显示「今天做了多少」 */
+function amountOn(gid,dk){
+  var s=0;
+  S.checkins.forEach(function(c){
+    if(gid&&c['目标ID']!==gid)return;
+    if(!gid&&isOrphanCheckin(c))return;
+    if(dkey(parseDate(c['日期']))===dk)s+=(c['数量']||0);
+  });
+  return s;
+}
+function last7Sum(gid){
+  var t=todayKey(),from=dkey(addDays(new Date(),-6)),s=0;
+  S.checkins.forEach(function(c){
+    if(c['目标ID']!==gid)return;
+    var d=dkey(parseDate(c['日期']));
+    if(d>=from&&d<=t)s+=(c['数量']||0);
+  });
+  return s;
+}
+
+/* ====== Rendering ====== */
+/* 统一刷新入口（铁律：渲染函数之间不得互相调用）。
+   applyTheme 放在最后：它要同步「我的」页里那段主题选择器的选中态，
+   而那段 DOM 是 renderMine() 刚重建出来的 —— 顺序反了就同步不到。 */
+function renderAll(){renderToday();renderDashboard();renderWeekly();renderMine();applyTheme()}
+
+function renderToday(){
+  var el=document.getElementById('tab-today');
+  if(S.sync==='loading'){el.innerHTML='<div class="skeleton-h"></div><div class="skeleton-h" style="width:60%"></div><div class="skeleton-h" style="width:80%"></div><div class="skeleton-h"></div>';return}
+  if(S.sync==='offline'&&!S.goals.length){el.innerHTML='<div class="empty">'+ic('alert',40)+'<p>数据加载失败</p><button class="btn btn-primary" onclick="loadAll()" style="margin-top:12px">重新同步</button></div>';return}
+
+  var t=todayKey();
+  var html='';
+
+  /* 离线告警条：读取失败或写入受限时给出明确出口，不静默 */
+  if(S.sync==='offline'){
+    html+='<div class="alert-card red" style="margin-bottom:12px"><div class="alert-text"><strong>未连接到线上数据</strong><span style="display:block;font-size:12px;color:var(--muted)">打卡和新建会失败。若是首次打开，请稍候或点右侧重试。</span></div><div class="alert-actions"><button class="btn btn-danger btn-sm" onclick="manualSync()">重试</button></div></div>';
+  } else if(S.readonly){
+    html+=needLoginNoticeHtml();
+  } else if(S.sync==='synced'&&S.lastSync){
+    var mm=String(S.lastSync.getHours()).padStart(2,'0')+':'+String(S.lastSync.getMinutes()).padStart(2,'0');
+    html+='<div class="tiny" style="padding:0 0 10px">'+ic('check',12)+' 已连接线上资料库 · 最近同步 '+mm+'</div>';
+  }
+
+  html+='<button class="btn btn-primary btn-block" style="margin-bottom:16px" onclick="openNewGoal()">'+ic('plus',18)+' 新建目标</button>';
+
+  /* ===== 今天要处理：逾期 / 昨日漏卡（区分休息日） ===== */
+  var realMissed=[],restGoals=[];
+  S.goals.forEach(function(g){
+    if(g['状态']==='已完成'||g['状态']==='已归档')return;
+    if(!missedYesterday(g))return;
+    var y=addDays(new Date(),-1);y.setHours(0,0,0,0);
+    var dates={};goalCheckins(g._id).forEach(function(c){dates[dkey(parseDate(c['日期']))]=true});
+    if(isRestDayG(g._id,y,dates))restGoals.push(g);else realMissed.push(g);
+  });
+
+  if(realMissed.length||restGoals.length){
+    html+='<section class="gs-section"><div class="section-title"><span>'+ic('flag',16)+' 今天要处理</span></div>';
+    realMissed.forEach(function(g){
+      var od=isOverdue(g);
+      var why=od?('已逾期 '+overdueDays(g)+' 天，且昨天没学'):'昨天没学 · 已滚入今日';
+      html+='<div class="alert-card red"><div class="alert-text" data-sp-bindable="database" data-sp-database-id="OereifjY46k3XWmQX6KVfK"><strong>'+esc(g['目标名称'])+'</strong><span style="display:block;font-size:12px;color:var(--muted)">'+why+'</span>'+planLineHtml(g)+'</div>';
+      html+='<div class="alert-actions"><button class="btn btn-danger btn-sm" onclick="openCheckin(\''+g._id+'\')">立即打卡</button>';
+      if(od)html+='<button class="btn btn-outline btn-sm" onclick="openEditGoal(\''+g._id+'\')">调整计划</button>';
+      html+='</div></div>';
+    });
+    restGoals.forEach(function(g){
+      html+='<div class="alert-card yellow"><div class="alert-text" data-sp-bindable="database" data-sp-database-id="OereifjY46k3XWmQX6KVfK"><strong>'+esc(g['目标名称'])+'</strong><span style="display:block;font-size:12px;color:var(--muted)">昨天漏打卡 · 已用本周休息日（每周 1 天），连续天数保住了</span>'+planLineHtml(g)+'</div>';
+      html+='<div class="alert-actions"><button class="btn btn-amber btn-sm" onclick="openCheckin(\''+g._id+'\')">立即打卡</button></div></div>';
+    });
+    html+='</section>';
+  }
+
+  /* ===== 待打卡 / 已打卡 分区 ===== */
+  var activeGoals=S.goals.filter(function(g){return g['状态']!=='已完成'&&g['状态']!=='已归档'&&!isGoalComplete(g)});
+  var pendHtml='',doneHtml='',doneCnt=0;
+  if(S.goals.length===0){
+    pendHtml='<div class="empty"><p>还没有目标，点击上方按钮创建</p></div>';
+  }else if(activeGoals.length===0){
+    pendHtml='<div class="empty"><p>所有目标都已达成，去「进度看板」回顾成果，或新建目标继续。</p></div>';
+  }else{
+    activeGoals.forEach(function(g){
+      var row=renderGoalCard(g);
+      if(hasCheckinOn(g._id,t)){doneHtml+=row;doneCnt++}else pendHtml+=row;
+    });
+  }
+
+  /* 分组容器：标题 + 网格。原来 pendHtml 是裸卡片流，靠卡片自带的 margin 撑间距；
+     现在统一交给 .card-grid 的 gap 管，网格内卡片不再各带 margin（见样式表）。 */
+  html+='<section class="gs-section"><div class="section-title"><span>'+ic('list',16)+' 待打卡目标</span></div><div class="card-grid">'+pendHtml+'</div></section>';
+
+  if(doneCnt>0){
+    html+='<section class="gs-section"><div class="section-title"><span>'+ic('check',16)+' 今日已打卡<span class="sec-badge">'+doneCnt+'</span></span></div>';
+    html+='<div class="card-grid">'+doneHtml+'</div></section>';
+  }
+
+  /* ===== A2 本周打卡节奏 ===== */
+  html+='<section class="gs-section">'+renderWeekRhythm()+'</section>';
+  html+='<div style="margin-top:16px"><button class="btn btn-outline btn-block" onclick="openNewGoal()">'+ic('plus',18)+' 新建学习目标</button></div>';
+  el.innerHTML=html;
+  restoreLeftoverToForms();
+}
+
+/* 登录回来后，把跳登录前暂存的内容填回对应目标的输入框，用户不用重填一遍。
+   只在「首次拿到数据的那次渲染」执行（见 loadAll 成功分支）：
+   写失败当下也会 renderAll()，如果那时就填回并清掉暂存，用户会看到「弹了失败提示但暂存没了」，
+   万一随后平台跳登录失败，内容就真空了 —— 所以失败当场只存不取，留给下一次真实加载。
+   骨架屏那次渲染走不到这里（sync==='loading' 会提前 return），所以不能靠在函数内置位来限次。
+   门禁是 _allowRestore：只有 loadAll 首次拿到数据的那一帧会临时置 true。 */
+function restoreLeftoverToForms(){
+  if(!_allowRestore)return;
+  var o=readLeftover();
+  if(!o||!o.forms)return;
+  var hit=0,rest={},restN=0;
+  Object.keys(o.forms).forEach(function(gid){
+    var f=o.forms[gid];
+    var amt=document.getElementById('amt_'+gid);
+    if(!amt){rest[gid]=f;restN++;return}   /* 目标已完成/已删除，暂存保留，去「我的」页提示 */
+    amt.value=f.amt;
+    var min=document.getElementById('min_'+gid);if(min&&f.min)min.value=f.min;
+    var nt=document.getElementById('note_'+gid);if(nt&&f.note)nt.value=f.note;
+    var sel=document.getElementById('date_'+gid);
+    if(sel){
+      var opt=[].find.call(sel.options,function(op){return op.value===f.date});
+      if(opt)sel.value=f.date;else{f.date=sel.options.length?sel.options[0].value:todayKey();sel.value=f.date}
+    }
+    hit++;
+  });
+  if(restN)saveLeftover({t:Date.now(),date:todayKey(),forms:rest});
+  else clearLeftover();
+  if(hit){
+    showToast('已填回你刚才没保存的 '+hit+' 项内容','success');
+    renderMine();
+  }
+}
+
+/* 卡片内的预案展示行 */
+function planLineHtml(g){
+  if(!g['应对策'])return'';
+  return '<span class="plan-line">'+ic('target',12)+' 预案：'+esc(g['应对策'])+'</span>';
+}
+
+/* ===== 学习备注（第十二阶段）=====
+   备注 = 挂在**单条打卡记录**上的自由文本，用来记「今天具体学了什么」：
+   从第几页读到第几页、完成了哪个函数/模块、看了哪一讲视频。
+   落在 checkins 表的「备注」字段（text 类型，字段早已存在，本次只是把它真正用起来）。 */
+/* 读取一条记录的备注文本。
+   ⚠️ 兼容历史写法：v23 及更早的 doCheckin 把「备注」当成补记标记、写死成 '补记'
+      （真正的补记语义由「是否补记」checkbox 承担）。
+      线上当前 12 条记录的备注列全为空（已核查），没有留下这类脏值；
+      但读取侧仍然挡一道：备注恰为 '补记' 且该记录确实标了补记 → 视为旧标记、不当用户备注，
+      否则每条补记上都会凭空多出一句莫名其妙的「补记」。
+      反方向不误伤：用户真写了「补记」二字但没勾补记 → 照常当备注显示。 */
+function noteOf(c){
+  if(!c)return'';
+  var n=(c['备注']===null||c['备注']===undefined)?'':String(c['备注']).trim();
+  if(!n)return'';
+  if(n==='补记'&&c['是否补记'])return'';
+  return n;
+}
+/* 记录行下方的备注行。
+   今日页 / 看板「最近记录」/ 看板「最近动态」/ 周报「本周打卡明细」/ 学习日志 共用这一段生成逻辑 ——
+   口径集中在一处，才不会再出现「这里显示了、那里漏了」的不一致（本项目最费时的 bug 类型）。
+   editable=true 时整行可点、可键盘激活（Enter / 空格），点击调 openEditNote(recordId) 直接改。
+   ⚠️ 编辑入口做成「整行可点」而不是一颗小按钮：小按钮在手机上够不到 44px 铁律，
+      而整行点击的触控面积天然够大。 */
+function noteLineHtml(c,editable){
+  var n=noteOf(c);
+  if(!n&&!editable)return'';
+  var cls='rec-note'+(editable?' rec-note-editable':'');
+  var act=editable
+    ? ' onclick="openEditNote(\''+c._id+'\')" onkeydown="noteKey(event,\''+c._id+'\')" role="button" tabindex="0" title="点击修改备注"'
+    : '';
+  var out='<div class="'+cls+'"'+act+'>'+
+    '<span class="rec-note-ic">'+ic('note',12)+'</span>'+
+    '<span class="rec-note-text'+(n?'':' rec-note-empty')+'">'+(n?esc(n):'未写备注')+'</span>'+
+    (editable?('<span class="rec-note-edit-ic">'+ic('edit',12)+'</span>'):'')+
+  '</div>';
+  return out;
+}
+/* 备注行的键盘激活。抽成函数而不是在行内写 if(event.key===...)：
+   行内写法要在 HTML 属性里再套一层引号转义，是「看着对、实际少个反斜杠就静默失效」的典型。 */
+window.noteKey=function(e,recordId){
+  if(e.key==='Enter'||e.key===' '){e.preventDefault();window.openEditNote(recordId)}
+};
+
+/* A2：本周打卡节奏（周一至周日 7 格）
+   ⚠️ 判据是「这天有没有打卡」（笔数 > 0），**不是**「有没有填分钟数」。
+      原来只看分钟，导致用户只填数量不填分钟时，本周已投入显示 0 分钟、格子也不亮，
+      与他「今天明明打过卡」的认知直接冲突。
+      现在：格子亮 = 有打卡；格内优先显示分钟，没填分钟则显示数量，都没有显示「已打卡」。 */
+function renderWeekRhythm(){
+  var active=S.goals.filter(function(g){return g['状态']!=='已完成'&&g['状态']!=='已归档'&&!isGoalComplete(g)});
+  if(!active.length)return'';
+  var t=todayKey(),mon=weekStart(new Date());
+  var CN=['一','二','三','四','五','六','日'];
+  var cells='',totalMin=0,totalCnt=0,totalAmt=0;
+  for(var i=0;i<7;i++){
+    var d=addDays(mon,i),dk=dkey(d);
+    var m=minutesOn(null,dk),cnt=checkinCountOn(null,dk),amt=amountOn(null,dk);
+    totalMin+=m;totalCnt+=cnt;totalAmt+=amt;
+    var future=dk>t;
+    var hit=cnt>0;                                    /* 有打卡就算亮，不依赖分钟 */
+    var cls='rhythm-day'+(hit?' hit':'')+(dk===t?' today':'')+(future?' future':'');
+    /* 格内文案优先级：分钟 > 数量（都带上单位语义，避免「24」看不出是什么） */
+    var valTxt='';
+    if(m>0)valTxt=m+'分';
+    else if(cnt>0)valTxt=trimNum(amt);                /* 没填分钟就给数量，别留空 */
+    cells+='<div class="'+cls+'"><div class="rd">'+CN[i]+'</div>'+
+      '<div class="rm">'+(hit?'✓':(future?'':'·'))+'</div>'+
+      '<div class="rv">'+valTxt+'</div></div>';
+  }
+  /* 标题栏：主打「打卡天数」（永远有意义），分钟作为补充信息。
+     原来只显示分钟，用户没填分钟时这里恒为 0，等于把一个选填字段当成了核心指标。 */
+  var note='本周已打卡 <b>'+totalCnt+'</b> 次 · <b>'+countDays(null,mon)+'</b> 天';
+  note+=totalMin>0?(' · '+totalMin+' 分钟'):(totalCnt>0?(' · 未记分钟'):'');
+  var out='<div class="card"><div class="card-title">'+ic('calendar',16)+' 本周打卡节奏'+
+    '<span class="card-title-note">'+note+'</span></div>'+
+    '<div class="rhythm">'+cells+'</div></div>';
+  return out;
+}
+/* 本周有打卡的天数 */
+function countDays(gid,mon){
+  var t=todayKey(),n=0;
+  for(var i=0;i<7;i++){
+    var dk=dkey(addDays(mon,i));
+    if(dk>t)break;
+    if(checkinCountOn(gid,dk)>0)n++;
+  }
+  return n;
+}
+
+/* C1：今日页卡片瘦身（核心数字留在看板） */
+function renderGoalCard(g){
+  var cl=COLORS[g['配色']]||COLORS.purple;
+  /* color  给「色块」用（左侧色条、色点、进度条）—— 亮色更醒目
+     colorInk 给「文字」用（完成量、剩余量、建议量）—— 够深才读得清 */
+  var color=cl.p,colorInk=cl.ink,t=todayKey();
+  var done=goalTotal(g._id);
+  var rate=getCompletionRate(g);
+  var sug=getTodaySuggested(g);
+  var st=calculateStreak(g._id);
+  var od=isOverdue(g);
+  var checked=hasCheckinOn(g._id,t);
+  var todayAmt=goalTodayTotal(g._id);
+  var complete=isGoalComplete(g);
+  var remDays=getRemainingDays(g);
+  var unit=g['单位']||'';
+
+  var badge='';
+  if(complete)badge='<span class="badge badge-done">已完成</span>';
+  else if(od)badge='<span class="badge badge-overdue">已逾期</span>';
+  else if(checked)badge='<span class="badge badge-today">今日已打卡</span>';
+
+  var html='<div class="card goal-card fade-in'+(checked?' is-checked':'')+(od?' is-overdue':'')+'" style="--accent:'+color+'"><span class="card-accent"></span><div class="card-body">';
+
+  /* 卡片头部：目标头像块（配色底 + 首字）+ 名称 + 状态徽标 + 编辑按钮。
+     头像块的底用配色浅档、字用同色墨色，两个令牌都过了对比度校验（≥4.7:1），
+     所以任何一套主题下都不会出现「亮底浅字」看不清的情况。 */
+  html+='<div class="card-head"><span class="goal-avatar" style="background:'+cl.bg+';color:'+colorInk+'" aria-hidden="true">'+esc(firstChar(g['目标名称']))+'</span><div class="goal-name" data-sp-bindable="database" data-sp-database-id="OereifjY46k3XWmQX6KVfK">'+esc(g['目标名称'])+'</div>'+badge;
+  html+='<button class="btn-icon" onclick="openEditGoal(\''+g._id+'\')" aria-label="编辑目标">'+ic('edit',16)+'</button>';
+  html+='</div>';
+
+  html+='<div class="progress"><div class="progress-fill" style="width:'+rate+'%;background:'+color+'"></div></div>';
+
+  html+='<div class="goal-line" data-sp-bindable="database" data-sp-database-id="OereifjY46k3XWmQX6KVfK">'+
+    '<b style="color:'+colorInk+'">'+trimNum(done)+'</b> / '+trimNum(g['总量'])+' '+esc(unit)+
+    (remDays===null
+      ? ' · <span class="no-deadline">未设截止日</span>'
+      : ' · 截止 '+fmtDateShort(g['截止日期'])+
+        (remDays>=0?' · '+remDays+' 天':' · 已过期 '+(0-remDays)+' 天'))+
+    (st>0?' · <span class="streak-flame">'+ic('fire',12)+'<b>'+st+'</b> 天</span>':'')+
+    (!complete&&!od
+      ? (remDays===null
+          ? ' · 剩余 <b style="color:'+colorInk+'">'+trimNum(getRemaining(g))+'</b> '+esc(unit)
+          : ' · 今日建议 <b style="color:'+colorInk+'">+'+trimNum(sug)+'</b> '+esc(unit))
+      : '')+
+  '</div>';
+
+  if(complete){
+    html+='<div class="today-note">'+ic('check',14)+'目标已达成，共投入 '+trimNum(done)+' '+esc(unit)+'。</div>';
+  }else{
+    var dateOpts='';
+    for(var di=0;di<=6;di++){
+      var dv=dkey(addDays(new Date(),-di));
+      dateOpts+='<option value="'+dv+'"'+(di===0?' selected':'')+'>'+(di===0?'今天':di===1?'昨天 '+fmtDateShort(dv):fmtDateShort(dv))+'</option>';
+    }
+    /* 无截止日时不预填「剩余全部」—— 那是误导，会让人以为得一次做完。
+       留空 + placeholder 提示，用户自己填今天实际做了多少。 */
+    var amtAttr = remDays===null
+      ? 'placeholder="'+trimNum(getRemaining(g))+'（剩余）"'
+      : 'value="'+trimNum(sug)+'"';
+    /* 打卡成功的那一次渲染，给按钮挂 is-success 播一次性回弹（配合样式表「成功回弹」）。
+       ⚠️ 门禁在调用方（doCheckin 写 S._popId），这里**消费一次即清**，且只认 id 命中的目标。
+          若改成「凡是 btn-success 就播」，每次刷新重渲染都会重播 —— 按钮会一直闪。 */
+    var popCls=(S._popId&&S._popId===g._id)?' is-success':'';
+    if(popCls)S._popId=null;
+    html+='<div class="checkin">'+
+      '<div class="field"><label for="amt_'+g._id+'">本次完成（'+esc(unit)+'）</label>'+
+        '<input type="number" step="any" min="0" inputmode="decimal" id="amt_'+g._id+'" '+amtAttr+'/></div>'+
+      '<div class="field"><label for="min_'+g._id+'">用时（分钟，可选）</label>'+
+        '<input type="number" step="1" min="0" max="1440" inputmode="numeric" id="min_'+g._id+'" placeholder="30"/></div>'+
+      '<div class="field"><label for="date_'+g._id+'">日期</label>'+
+        '<select id="date_'+g._id+'">'+dateOpts+'</select></div>'+
+      /* 学习备注：整行独占、可选。placeholder 直接给出三种最常见的写法，
+         免得用户对着空框不知道「该写多细」而干脆不写。 */
+      '<div class="field note-field"><label for="note_'+g._id+'">学习备注（可选）</label>'+
+        '<textarea id="note_'+g._id+'" rows="2" maxlength="500" placeholder="这次具体学了什么？例：第 12–35 页，重点看懂 agg 的用法 / 完成登录接口并跑通 / 看完第 3 讲"></textarea></div>'+
+      (S.readonly
+        ? '<button class="btn btn-outline checkin-btn" onclick="confirmLoginToCheckin(\''+g._id+'\')">'+ic('lock',16)+'登录后打卡</button>'
+        : '<button class="btn '+(checked?'btn-success':'btn-primary')+' checkin-btn'+popCls+'" onclick="doCheckin(\''+g._id+'\')">'+ic('check',16)+(checked?'再记一笔':'打卡')+'</button>')+
+    '</div>';
+    if(S.readonly)html+='<div class="today-note" style="color:var(--amber)">'+ic('lock',12)+'内容填好了也不会丢：点上面按钮登录，回来自动填回。</div>';
+    if(checked)html+='<div class="today-note">'+ic('check',14)+'今天已 +'+trimNum(todayAmt)+' '+esc(unit)+'，可以继续追加。</div>';
+    /* 今天打过的每一笔都摊在卡片里，带各自的学习备注 ——
+       打卡后最想确认的两件事就是「这一笔存下来没有」和「我写的那句话在不在」。
+       ⚠️ 未写备注的也显示（灰色「未写备注」），因为这里的备注行是**可点的**，
+          等于给当天漏写的内容留了一个就地补写的入口。 */
+    if(checked){
+      var todayRecs=goalCheckins(g._id).filter(function(c){return dkey(parseDate(c['日期']))===t});
+      if(todayRecs.length){
+        html+='<div class="rec-wrap">';
+        todayRecs.forEach(function(c){
+          html+='<div class="record-item"><span class="record-amt">+'+trimNum(c['数量']||0)+' '+esc(unit)+'</span>'+
+            '<span class="record-min">'+(c['分钟数']>0?('用时 '+c['分钟数']+' 分钟'+minUnitHint(unit,c['分钟数'])):'')+'</span>'+
+            '<button class="btn-icon danger record-del" onclick="deleteRecord(\''+c._id+'\')" aria-label="删除记录">'+ic('trash',14)+'</button></div>';
+          html+=noteLineHtml(c,true);
+        });
+        html+='</div>';
+      }
+    }
+  }
+
+  if(g['最大障碍']||g['应对策']){
+    html+='<div class="plan-section">';
+    if(g['最大障碍'])html+='<div class="plan-row"><span class="plan-label">障碍：</span><span class="plan-value" data-sp-bindable="database" data-sp-database-id="OereifjY46k3XWmQX6KVfK">'+esc(g['最大障碍'])+'</span></div>';
+    if(g['应对策'])html+='<div class="plan-row"><span class="plan-label">对策：</span><span class="plan-value" data-sp-bindable="database" data-sp-database-id="OereifjY46k3XWmQX6KVfK">'+esc(g['应对策'])+'</span></div>';
+    html+='</div>';
+  }
+  html+='</div></div>';
+  return html;
+}
+
+function renderDashboard(){
+  var el=document.getElementById('tab-dashboard');
+  if(S.sync==='loading'){el.innerHTML='<div class="skeleton-h"></div><div class="skeleton-h" style="width:60%"></div>';return}
+  var html='';
+  if(S.goals.length===0){html+='<div class="empty"><p>还没有目标</p></div>';el.innerHTML=html;return}
+
+  /* C3：桌面端多栏网格 —— 包进分组容器，标题形态与「今日打卡」页保持一致 */
+  html+='<section class="gs-section"><div class="section-title"><span>'+ic('target',16)+' 目标进度</span></div><div class="card-grid">';
+  S.goals.forEach(function(g){html+=renderBoardCard(g)});
+  html+='</div></section>';
+
+  html+=renderChart();
+  html+=renderHeatmap();
+  /* 学习日志排在图表之后、「最近动态」之前：
+     它是带备注的主体内容（近 14 天逐条、可补写），而动态只是 8 条概览，主体在前更贴回看的动线。 */
+  html+=renderStudyLog();
+  html+=renderRecentFeed();
+  el.innerHTML=html;
+}
+
+/* 看板目标卡：进度环 + 三个核心数字 + 预案 + 最近 10 条可删记录 */
+function renderBoardCard(g){
+  var cl=COLORS[g['配色']]||COLORS.purple;
+  var color=cl.p,colorInk=cl.ink;
+  var rate=getCompletionRate(g);
+  var streak=calculateStreak(g._id);
+  var est=getEstimatedCompletionDetail(g);
+  var done=goalTotal(g._id);
+  var total=g['总量']||0;
+  var unit=g['单位']||'';
+
+  var html='<div class="card goal-card fade-in" style="--accent:'+color+'"><span class="card-accent"></span><div class="card-body">';
+  html+='<div class="card-head"><span class="goal-avatar" style="background:'+cl.bg+';color:'+colorInk+'" aria-hidden="true">'+esc(firstChar(g['目标名称']))+'</span><div class="goal-name" data-sp-bindable="database" data-sp-database-id="OereifjY46k3XWmQX6KVfK">'+esc(g['目标名称'])+'</div></div>';
+
+  var circ=2*Math.PI*34;
+  var offset=circ*(1-rate/100);
+  html+='<div class="progress-ring-wrap">';
+  html+='<svg class="progress-ring" width="90" height="90" viewBox="0 0 90 90"><circle cx="45" cy="45" r="34" fill="none" stroke="'+cl.bg+'" stroke-width="7"/><circle cx="45" cy="45" r="34" fill="none" stroke="'+color+'" stroke-width="7" stroke-linecap="round" stroke-dasharray="'+circ.toFixed(1)+'" stroke-dashoffset="'+offset.toFixed(1)+'" transform="rotate(-90 45 45)"/><text x="45" y="42" text-anchor="middle" font-size="16" font-weight="500" fill="'+colorInk+'">'+rate+'%</text><text x="45" y="56" text-anchor="middle" font-size="9" fill="var(--muted)">完成率</text></svg>';
+
+  html+='<div style="flex:1;min-width:0">';
+  html+='<div class="stats-row" style="margin-bottom:8px">';
+  html+='<div class="stat"><div class="stat-num">'+trimNum(done)+'/'+trimNum(total)+'</div><div class="stat-label">'+esc(unit)+'</div></div>';
+  html+='<div class="stat"><div class="stat-num" style="color:var(--amber)">'+streak+'</div><div class="stat-label">连续天数</div></div>';
+  html+='</div>';
+  var estHtml='';
+  if(est.status==='completed')estHtml='<span style="color:var(--success)">已完成</span>';
+  else if(est.status==='ok'){
+    /* diff===null 表示目标没设截止日，不能落进下面「准时」分支 —— JS 里 null>0 和 null<0 都是 false */
+    if(est.diff===null||est.diff===undefined)estHtml='<span style="font-size:12px">未设截止日</span>';
+    else if(est.diff>0)estHtml='<span style="color:var(--success)">提前'+est.diff+'天</span>';
+    else if(est.diff<0)estHtml='<span style="color:var(--danger)">拖后'+(-est.diff)+'天</span>';
+    else estHtml='<span style="color:var(--success)">准时</span>';
+    estHtml+=' <span style="font-size:12px">('+fmtDateShort(dkey(est.date))+')</span>';
+  }else{
+    estHtml='<span style="font-size:12px">暂无推算（近 7 天打卡不足 3 天）</span>';
+  }
+  html+='<div style="font-size:13px;color:var(--muted)">预计完成：'+estHtml+'</div>';
+  html+='</div></div>';
+
+  if(g['最大障碍']||g['应对策']){
+    html+='<div class="plan-section">';
+    if(g['最大障碍'])html+='<div class="plan-row"><span class="plan-label">障碍：</span><span class="plan-value" data-sp-bindable="database" data-sp-database-id="OereifjY46k3XWmQX6KVfK">'+esc(g['最大障碍'])+'</span></div>';
+    if(g['应对策'])html+='<div class="plan-row"><span class="plan-label">对策：</span><span class="plan-value" data-sp-bindable="database" data-sp-database-id="OereifjY46k3XWmQX6KVfK">'+esc(g['应对策'])+'</span></div>';
+    html+='</div>';
+  }
+
+  var recs=goalCheckins(g._id).sort(function(a,b){return parseDate(b['日期'])-parseDate(a['日期'])}).slice(0,10);
+  if(recs.length){
+    html+='<div class="divider"></div><div class="mini-title">最近记录</div>';
+    recs.forEach(function(r){
+      var d=parseDate(r['日期']),dk=dkey(d);
+      /* 日期读不出来时别再拼 weekDay —— 会渲染成「未设置 周undefined」 */
+      var dl;
+      if(isInvalid(d))dl='<span style="color:var(--amber)">日期缺失</span>';
+      else dl=(dk===todayKey()?'今天':fmtDateShort(dk)+' 周'+weekDay(d));
+      var minStr=r['分钟数']>0?(' · '+r['分钟数']+'分钟'+minUnitHint(unit,r['分钟数'])):'';
+      var bf=r['是否补记']?'<span class="record-tag">补</span> ':'';
+      html+='<div class="rec-wrap"><div class="record-item" data-sp-bindable="database" data-sp-database-id="DRuD6oQI5lrK5IhZQS1fzn">'+bf+'<span class="record-date">'+dl+'</span><span class="record-amt">+'+trimNum(r['数量']||0)+' '+esc(unit)+'</span><span class="record-min">'+minStr+'</span><button class="btn-icon danger record-del" onclick="deleteRecord(\''+r._id+'\')" aria-label="删除记录">'+ic('trash',14)+'</button></div>'+noteLineHtml(r,true)+'</div>';
+    });
+  }
+  html+='</div></div>';
+  return html;
+}
+
+/* A1-1：近 35 天打卡热力图（周一左对齐，5 级色阶）
+   ⚠️ 判据同节奏格：**有打卡就上色**，不要求填了分钟数。
+      原来只按分钟分色阶，导致「打了卡但没填分钟」的日子在热力图上跟「没打卡」长得一样。
+      现在的色阶口径：
+        - 填了分钟 → 按分钟分 1~4 级（保持原有语义「颜色越深投入越多」）
+        - 没填分钟但有打卡 → 给最低一级 l1，表示「这天有动作」
+      title 里把两种信息都写清楚，鼠标悬停能分辨。 */
+function renderHeatmap(){
+  if(S.checkins.length===0)return'';
+  var start=addDays(new Date(),-34);start.setHours(0,0,0,0);
+  var offset=Math.round(daysBetween(weekStart(start),start));
+  var cells='';
+  for(var i=0;i<offset;i++)cells+='<span class="heat-cell blank"></span>';
+  for(var j=0;j<35;j++){
+    var d=addDays(start,j),dk=dkey(d);
+    var m=minutesOn(null,dk),cnt=checkinCountOn(null,dk),amt=amountOn(null,dk);
+    var lv;
+    if(m>0)lv=m<30?1:m<60?2:m<90?3:4;      /* 有分钟：按投入量分色阶 */
+    else if(cnt>0)lv=1;                     /* 没分钟但有打卡：最低一级，至少能看出这天做了 */
+    else lv=0;                              /* 真没打卡 */
+    var tip;
+    if(m>0)tip=dk+' · '+m+' 分钟'+(cnt>1?(' · '+cnt+' 笔'):'');
+    else if(cnt>0)tip=dk+' · 有打卡（'+cnt+' 笔，未记分钟）· 合计 '+trimNum(amt);
+    else tip=dk+' · 未打卡';
+    cells+='<span class="heat-cell'+(lv>0?' l'+lv:'')+(dk===todayKey()?' today':'')+'" title="'+tip+'"></span>';
+  }
+  var out='';
+  out+='<div class="card fade-in" style="margin-top:14px">'+
+    '<div class="card-title">'+ic('calendar',16)+' 近 35 天打卡热力<span class="card-title-note">颜色越深投入越多</span></div>'+
+    '<div class="heat-days"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>'+
+    '<div class="heat-grid">'+cells+'</div>'+
+    '<div class="heat-legend">少<span class="heat-cell"></span><span class="heat-cell l1"></span><span class="heat-cell l2"></span><span class="heat-cell l3"></span><span class="heat-cell l4"></span>多</div>'+
+  '</div>';
+  return out;
+}
+
+/* A1-3：学习日志（第十二阶段新增）
+   把每条打卡记录上的备注按日期串成流水，专门解决「随时回看自己每天到底学了什么」。
+   与「最近动态」的分工：动态是最近 8 条概览、只读；日志覆盖近 14 天、按天分组，
+   而且**每条都能点开改写或补写** —— 哪天忘了写，直接在日志里补上，不用去翻那条记录。
+   ⚠️ 两道上限（近 14 天 + 最多 30 笔）：看板本来就很长，没有上限的话这张卡用久了会无限膨胀。
+   ⚠️ 只收「有日期且能解析」的记录：日期缺失的记录按日期分组会落到 'NaN-NaN-NaN' 键上，
+      混进排序里会把整张日志的顺序搅乱（周报明细那边有 '__bad__' 兜底分组，这里不重复造一套）。 */
+function renderStudyLog(){
+  if(!S.checkins.length)return'';
+  var t=todayKey();
+  var from=dkey(addDays(new Date(),-13));          /* 近 14 天，含今天 */
+  var recs=S.checkins.filter(function(c){
+    if(isOrphanCheckin(c))return false;            /* 孤儿记录（目标已删）不进日志，否则出现无主条目 */
+    var dk=dkey(parseDate(c['日期']));
+    return dk>=from&&dk<=t;
+  }).sort(function(a,b){return parseDate(b['日期'])-parseDate(a['日期'])});
+
+  var MAX=30;
+  var truncated=recs.length>MAX;
+  if(truncated)recs=recs.slice(0,MAX);
+
+  var CN=['日','一','二','三','四','五','六'];
+  var groups={},order=[];
+  recs.forEach(function(r){
+    var dk=dkey(parseDate(r['日期']));
+    if(!groups[dk]){groups[dk]=[];order.push(dk)}
+    groups[dk].push(r);
+  });
+  order.sort(function(a,b){return a<b?1:-1});      /* 零填充日期串，字符串比较即时间倒序 */
+
+  var body='',noteCnt=0;
+  order.forEach(function(dk){
+    var d=parseDate(dk);
+    var dayAmt=0,dayMin=0,dayNotes=0,rows='';
+    groups[dk].forEach(function(r){
+      var g=goalById(r['目标ID']);
+      var cl=g?(COLORS[g['配色']]||COLORS.purple):COLORS.purple;
+      var nm=g?g['目标名称']:'（目标已删除）';
+      var unit=g?(g['单位']||''):'';
+      var nt=noteOf(r);
+      dayAmt+=(r['数量']||0);dayMin+=(r['分钟数']||0);if(nt)dayNotes++;
+      rows+='<div class="log-item">'+
+        '<span class="color-dot" style="background:'+cl.p+';width:8px;height:8px;flex:0 0 auto;margin-top:7px"></span>'+
+        '<div class="log-body">'+
+          '<div class="log-meta">'+esc(nm)+' · +'+trimNum(r['数量']||0)+' '+esc(unit)+
+            (r['分钟数']>0?(' · 用时 '+r['分钟数']+' 分钟'+minUnitHint(unit,r['分钟数'])):'')+
+            (r['是否补记']?' · <span class="record-tag">补</span>':'')+
+          '</div>'+
+          /* 备注行整行可点：有备注→改，没备注→补写。空态写成「未写备注 · 点此补写」，
+             否则用户只会看到一片灰字、不知道这里其实可以点。 */
+          '<div class="log-note'+(nt?'':' is-empty')+'" onclick="openEditNote(\''+r._id+'\')" onkeydown="noteKey(event,\''+r._id+'\')" role="button" tabindex="0" title="点击'+(nt?'修改备注':'补写备注')+'">'+
+            (nt?esc(nt):'未写备注 · 点此补写')+'</div>'+
+        '</div>'+
+        '<button class="btn-icon danger record-del" onclick="deleteRecord(\''+r._id+'\')" aria-label="删除记录">'+ic('trash',14)+'</button>'+
+      '</div>';
+    });
+    noteCnt+=dayNotes;
+    var label;
+    if(dk===t)label='今天';
+    else if(dk===dkey(addDays(new Date(),-1)))label='昨天';
+    else label=fmtDateShort(dk)+' 周'+CN[d.getDay()];
+    body+='<div class="log-day"><div class="log-day-head">'+label+
+      '<span class="log-day-sum">'+groups[dk].length+' 笔 · +'+trimNum(dayAmt)+
+        (dayMin>0?(' · '+dayMin+' 分钟'):'')+
+        (dayNotes>0?(' · 备注 '+dayNotes+' 条'):' · 未写备注')+
+      '</span></div>'+rows+'</div>';
+  });
+
+  var out='<div class="card card-body learning-log fade-in" style="margin-top:14px" id="study-log">'+
+    '<div class="card-title">'+ic('note',16)+' 学习日志'+
+      '<span class="card-title-note">近 14 天 · '+recs.length+' 笔 · 备注 '+noteCnt+' 条'+(truncated?('（只显示最近 '+MAX+' 笔）'):'')+'</span></div>';
+  if(!recs.length){
+    out+='<div class="tiny" style="padding:8px 0 2px">近 14 天还没有打卡记录。在「今日打卡」记一笔并填上学习备注，这里就会按日期串成日志。</div>';
+  }else{
+    if(!noteCnt)out+='<div class="tiny" style="padding:8px 0 2px">还没有写过备注。点任意一条下面的「未写备注 · 点此补写」，就能给已有记录补上当天学了什么。</div>';
+    out+=body;
+  }
+  return out+'</div>';
+}
+
+/* A1-2：最近动态（全局最近 8 条） */
+function renderRecentFeed(){
+  if(S.checkins.length===0)return'';
+  var t=todayKey(),y=dkey(addDays(new Date(),-1));
+  var logs=S.checkins.slice().sort(function(a,b){return parseDate(b['日期'])-parseDate(a['日期'])}).slice(0,8);
+  var rows='';
+  logs.forEach(function(l){
+    var g=goalById(l['目标ID']);
+    if(!g)return;
+    var cl=COLORS[g['配色']]||COLORS.purple;
+    var dk=dkey(parseDate(l['日期']));
+    var dl=dk===t?'今天':dk===y?'昨天':fmtDateShort(dk);
+    rows+='<div class="feed-row"><span class="feed-dot" style="background:'+cl.p+'"></span>'+
+      '<div class="feed-main"><b>'+esc(g['目标名称'])+'</b> +'+trimNum(l['数量']||0)+' '+esc(g['单位']||'')+
+        (l['分钟数']?' · 用时 '+l['分钟数']+' 分钟'+minUnitHint(g['单位'],l['分钟数']):'')+
+        (l['是否补记']?' <span class="record-tag">补</span>':'')+
+        /* 备注跟在这一行的下方。只读展示（可编辑入口在最近记录 / 周报明细 / 学习日志里）——
+           这里是「发生了什么事」的流水，塞一个可点区域进来会让整列看着都能点。 */
+        (noteOf(l)?('<div class="feed-note" title="'+esc(noteOf(l))+'">'+esc(noteOf(l))+'</div>'):'')+
+        '</div>'+
+      '<span class="feed-date">'+dl+'</span></div>';
+  });
+  var out='';
+  out+='<div class="card fade-in" style="margin-top:14px">'+
+    '<div class="card-title">'+ic('list',16)+' 最近动态</div>'+
+    (rows||'<div class="tiny">暂无记录</div>')+'</div>';
+  return out;
+}
+
+/* 近 14 天堆叠柱状图。
+   ⚠️ 分钟数是选填的，只画分钟会出现「明明天天打卡，图表却说没有数据」。
+      所以做双指标回退：**只要有任意一天填了分钟，就画分钟**（保持可比性）；
+      **一天都没填分钟，则改画「投入量」**，并在标题上标明当前画的是哪个口径，
+      避免把两种不同量纲的数字混在同一张图里比较。 */
+function renderChart(){
+  var today=new Date();today.setHours(0,0,0,0);
+  var days=[];for(var i=13;i>=0;i--)days.push(addDays(today,-i));
+
+  /* 先探一次：整个窗口内有没有人填过分钟 */
+  var anyMin=0;
+  S.checkins.forEach(function(c){if((c['分钟数']||0)>0)anyMin+=(c['分钟数']||0)});
+  var useMin=anyMin>0;
+  var field=useMin?'分钟数':'数量';
+
+  var maxVal=0;
+  var data=days.map(function(d){
+    var dk=dkey(d);var perGoal={};
+    S.goals.forEach(function(g){
+      var v=0;goalCheckins(g._id).forEach(function(c){
+        if(dkey(parseDate(c['日期']))===dk)v+=(c[field]||0);
+      });
+      if(v>0)perGoal[g._id]=v;
+    });
+    var total=0;Object.keys(perGoal).forEach(function(k){total+=perGoal[k]});
+    if(total>maxVal)maxVal=total;
+    return{date:d,total:total,perGoal:perGoal};
+  });
+  if(maxVal===0){
+    return '<div class="card card-body empty" style="margin-top:16px">'+
+      (useMin?'暂无数据，打卡后将显示图表':'近 14 天还没有打卡记录')+'</div>';
+  }
+
+  var chartW=Math.min(680,window.innerWidth-80);
+  var chartH=180,barW=chartW/14*0.6,gap=chartW/14*0.4;
+  var svg='<div class="card card-body chart-wrap fade-in"><div style="font-size:14px;font-weight:600;margin-bottom:8px">近14天投入'+(useMin?'分钟':'量')+
+    (useMin?'':'<span style="font-size:11px;font-weight:400;color:var(--muted)">（这 14 天都没有填分钟数，改按目标各自的数量口径合计）</span>')+'</div>';
+  svg+='<div class="chart-legend">';
+  S.goals.forEach(function(g){var cl=COLORS[g['配色']]||COLORS.purple;svg+='<div class="legend-item"><div class="legend-dot" style="background:'+cl.p+'"></div>'+g['目标名称']+'</div>'});
+  svg+='</div>';
+  svg+='<svg width="'+chartW+'" height="'+(chartH+30)+'" viewBox="0 0 '+chartW+' '+(chartH+30)+'">';
+  /* grid lines */
+  for(var i=0;i<=4;i++){var y=chartH-i*chartH/4;svg+='<line x1="0" y1="'+y.toFixed(1)+'" x2="'+chartW+'" y2="'+y.toFixed(1)+'" stroke="var(--border)" stroke-width="0.5"/>';svg+='<text x="0" y="'+(y-2).toFixed(1)+'" font-size="9" fill="var(--muted)">'+Math.round(maxVal*i/4)+'</text>'}
+  days.forEach(function(d,i){
+    var dp=data[i];var x=i*(barW+gap)+gap/2;
+    var yOff=chartH;
+    S.goals.forEach(function(g){
+      var v=dp.perGoal[g._id]||0;
+      if(v>0&&maxVal>0){
+        var h=(v/maxVal)*chartH;var cl=COLORS[g['配色']]||COLORS.purple;
+        svg+='<rect x="'+x.toFixed(1)+'" y="'+(yOff-h).toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+h.toFixed(1)+'" fill="'+cl.p+'" rx="2"/>';
+        yOff-=h;
+      }
+    });
+    var lbl=d.getMonth()+1+'/'+d.getDate();
+    svg+='<text x="'+(x+barW/2).toFixed(1)+'" y="'+(chartH+14)+'" text-anchor="middle" font-size="8" fill="var(--muted)">'+lbl+'</text>';
+  });
+  svg+='</svg></div>';
+  return svg;
+}
+
+/* 本周打卡明细：按日期倒序平铺（今天在最上面）。
+   之前周报页只有汇总数字、没有明细，用户根本看不到「今天打了哪几笔」，
+   会误以为「今天打的卡没进本周统计」——其实数字里算进去了，只是没地方显示。
+   ⚠️ 传入的 weekRecs 已经过滤过孤儿记录，本函数不再重复过滤。 */
+function renderWeekRecords(weekRecs,wsDate,today){
+  var tk=todayKey();
+  var CN=['日','一','二','三','四','五','六'];
+  if(!weekRecs.length){
+    return '<div class="card card-body" style="margin-top:12px">'+
+      '<div class="card-title">'+ic('list',16)+' 本周打卡明细</div>'+
+      '<div class="empty" style="padding:16px 0"><p>这一周还没有打卡记录</p></div></div>';
+  }
+  /* 按日期分组，日期倒序（今天最前），组内按记录时间倒序 */
+  var groups={};
+  weekRecs.forEach(function(r){
+    var d=parseDate(r['日期']);
+    var dk=isInvalid(d)?'__bad__':dkey(d);
+    if(!groups[dk])groups[dk]=[];
+    groups[dk].push(r);
+  });
+  var keys=Object.keys(groups).sort(function(a,b){
+    if(a==='__bad__')return 1;              /* 日期缺失的沉到最底 */
+    if(b==='__bad__')return -1;
+    return a<b?1:-1;                        /* 字符串比较即可，零填充格式天然有序 */
+  });
+
+  var body='';
+  var shown=0;
+  keys.forEach(function(dk){
+    var recs=groups[dk];
+    /* 日期标题：今天/昨天特别标出来，让用户一眼确认今天在里面 */
+    var label,isToday=false,extra='';
+    if(dk==='__bad__'){
+      label='<span style="color:var(--amber)">日期缺失</span>';
+    }else{
+      var d=parseDate(dk);
+      var yd=addDays(today,-1);
+      isToday=(dk===tk);
+      if(isToday){label='今天';extra=' <span class="record-tag">今天</span>';}
+      else if(dk===dkey(yd)){label='昨天';}
+      else{label=fmtDateShort(dk)+' 周'+CN[d.getDay()];}
+    }
+    var dayAmt=0,dayMin=0;
+    recs.forEach(function(r){dayAmt+=(r['数量']||0);dayMin+=(r['分钟数']||0)});
+
+    body+='<div class="divider"></div>';
+    body+='<div class="mini-title"'+(isToday?' style="color:var(--brand)"':'')+'>'+label+
+      '<span style="float:right;font-weight:400">合计 '+trimNum(dayAmt)+
+      (dayMin>0?' · '+dayMin+' 分钟':'')+'</span></div>';
+    recs.forEach(function(r){
+      var g=goalById(r['目标ID']);
+      var cl=g?(COLORS[g['配色']]||COLORS.purple):COLORS.purple;
+      var nm=g?g['目标名称']:('（目标已删除）');
+      var unit=g?(g['单位']||''):'';
+      var bf=r['是否补记']?'<span class="record-tag">补</span> ':'';
+      body+='<div class="rec-wrap"><div class="record-item" data-sp-bindable="database" data-sp-database-id="DRuD6oQI5lrK5IhZQS1fzn">'+
+        '<span class="color-dot" style="background:'+cl.p+';width:8px;height:8px;flex:0 0 auto"></span>'+
+        '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+bf+esc(nm)+'</span>'+
+        '<span class="record-amt">+'+trimNum(r['数量']||0)+' '+esc(unit)+'</span>'+
+        '<span class="record-min">'+(r['分钟数']>0?('用时 '+r['分钟数']+'分'+minUnitHint(unit,r['分钟数'])):'')+'</span>'+
+        '<button class="btn-icon danger record-del" onclick="deleteRecord(\''+r._id+'\')" aria-label="删除记录">'+ic('trash',14)+'</button>'+
+      '</div>'+noteLineHtml(r,true)+'</div>';
+      shown++;
+    });
+  });
+
+  /* 卡片头把「本周分钟合计」也带上：明细里每条的分钟是散的，
+     汇总数字要看上面那张「本周汇总」卡，来回扫容易漏。
+     这里再给一次总数，用户核对「我填的分钟到底进没进统计」时一眼就能对上。 */
+  var headMin=0,headCnt=0,headNote=0;
+  weekRecs.forEach(function(r){headMin+=(r['分钟数']||0);headCnt++;if(noteOf(r))headNote++});
+  return '<div class="card card-body" style="margin-top:12px" id="week-records">'+
+    '<div class="card-title">'+ic('list',16)+' 本周打卡明细'+
+      '<span class="card-title-note">共 <b>'+shown+'</b> 条'+
+      (headMin>0?(' · 用时合计 <b>'+headMin+'</b> 分钟'):(headCnt?' · 未记用时':''))+
+      /* 写了几条备注也摆出来：用户回看这一周时，一眼能看出「哪天只是打了卡、没有留下内容」，
+         那些缺口正是最该补写的地方（每条备注都可以点开补）。 */
+      ' · 有备注 <b>'+headNote+'</b> 条'+
+      ' · 按日期倒序</span></div>'+
+    body+'</div>';
+}
+
+/* 周报纯文本里的明细段：按日期倒序，每天一行列各目标的量。
+   跟 renderWeekRecords 同口径，保证「页面上看到的」和「复制走的」一致。 */
+function weekDetailText(weekRecs,today){
+  if(!weekRecs.length)return'（本周没有打卡记录）';
+  var tk=todayKey(),yd=dkey(addDays(today,-1));
+  var groups={};
+  weekRecs.forEach(function(r){
+    var d=parseDate(r['日期']);
+    var dk=isInvalid(d)?'__bad__':dkey(d);
+    if(!groups[dk])groups[dk]=[];
+    groups[dk].push(r);
+  });
+  var keys=Object.keys(groups).sort(function(a,b){
+    if(a==='__bad__')return 1;
+    if(b==='__bad__')return -1;
+    return a<b?1:-1;
+  });
+  var lines=[];
+  keys.forEach(function(dk){
+    var recs=groups[dk];
+    var label;
+    if(dk==='__bad__')label='（日期缺失）';
+    else if(dk===tk)label='今天';
+    else if(dk===yd)label='昨天';
+    else label=fmtDateShort(dk);
+        var parts=recs.map(function(r){
+          var g=goalById(r['目标ID']);
+          /* 备注进纯文本前先把换行压成空格：这个函数的排版契约是「一天一行」，
+             备注里的换行会把结构撑断，复制到周报/笔记里就散成一片。 */
+          var nt=noteOf(r).replace(/\s+/g,' ');
+          return (g?g['目标名称']:'（目标已删除）')+' +'+trimNum(r['数量']||0)+(g?(g['单位']||''):'')+
+                 (r['分钟数']>0?('（用时 '+r['分钟数']+' 分钟）'):'')+
+                 (r['是否补记']?'（补）':'')+
+                 (nt?('　备注：'+nt):'');
+        });
+    lines.push('  '+label+'：'+parts.join('；'));
+  });
+  return lines.join('\n');
+}
+
+function renderWeekly(){
+  var el=document.getElementById('tab-weekly');
+  if(S.sync==='loading'){el.innerHTML='<div class="skeleton-h"></div>';return}
+  var today=new Date();today.setHours(0,0,0,0);
+  var thisWeekStart=weekStart(today);
+  var wsDate=addDays(thisWeekStart,S.weekOffset*7);
+  var weekEnd=addDays(wsDate,6);
+  var nextDisabled=S.weekOffset>=0;
+
+  var html='<div class="week-nav"><button class="btn-icon" onclick="changeWeek(-1)">'+ic('chevL',20)+'</button>';
+  html+='<div class="week-display">'+fmtDate(dkey(wsDate))+' - '+fmtDate(dkey(weekEnd))+(S.weekOffset===0?' (本周)':S.weekOffset===-1?' (上周)':'')+'</div>';
+  html+='<button class="btn-icon" '+(nextDisabled?'disabled style="opacity:.3"':'')+' onclick="changeWeek(1)">'+ic('chevR',20)+'</button></div>';
+
+  /* Summary
+     ⚠️ 必须排除孤儿记录（所属目标已被删除的打卡）。不清掉的话，用户删了目标，
+        周报里的「打卡天数」「投入量」「分钟数」却还把它们算进去 ——
+        表现为「本周打卡 4 天」但下面一个目标列表都没有他打过卡的痕迹，数字对不上。
+        这也是用户点「清空示例数据」想解决的问题。 */
+  var wsKey=dkey(wsDate),weKey=dkey(weekEnd);
+  var weekRecs=S.checkins.filter(function(c){
+    if(isOrphanCheckin(c))return false;
+    var d=parseDate(c['日期']);d.setHours(0,0,0,0);return d>=wsDate&&d<=weekEnd;
+  });
+  var totalAmt=0,totalMin=0,daySet={};
+  weekRecs.forEach(function(c){totalAmt+=(c['数量']||0);totalMin+=(c['分钟数']||0);daySet[dkey(parseDate(c['日期']))]=true});
+  var dayCount=Object.keys(daySet).length;
+
+  html+='<div class="week-summary" data-sp-bindable="database" data-sp-database-id="DRuD6oQI5lrK5IhZQS1fzn">';
+  html+='<div class="week-stat"><div class="week-stat-num">'+totalAmt+'</div><div class="week-stat-label">投入量</div></div>';
+  html+='<div class="week-stat"><div class="week-stat-num">'+dayCount+'</div><div class="week-stat-label">打卡天数</div></div>';
+  /* 分钟数是选填的。有打卡却一分未记时显示「未记」，别把「没填」显示成「0」——
+     0 会被读成「投入为零」，与旁边有值的投入量自相矛盾。 */
+  var minCell=(totalMin>0)?String(totalMin)
+    :(weekRecs.length?'<span style="font-size:13px;color:var(--muted)">未记</span>':'0');
+  html+='<div class="week-stat"><div class="week-stat-num">'+minCell+'</div><div class="week-stat-label">分钟数</div></div>';
+  html+='</div>';
+
+  /* Compare —— 同样排除孤儿记录，否则「环比上周」的分母是被删目标的数字，
+     涨跌幅会失真（上上周正是示例数据最多的时段，这一项偏差最明显）。 */
+  var prevStart=addDays(wsDate,-7),prevEnd=addDays(weekEnd,-7);
+  var prevRecs=S.checkins.filter(function(c){
+    if(isOrphanCheckin(c))return false;
+    var d=parseDate(c['日期']);d.setHours(0,0,0,0);return d>=prevStart&&d<=prevEnd;
+  });
+  var prevAmt=0,prevMin=0,prevDays={};
+  prevRecs.forEach(function(c){prevAmt+=(c['数量']||0);prevMin+=(c['分钟数']||0);prevDays[dkey(parseDate(c['日期']))]=true});
+  var prevDayCount=Object.keys(prevDays).length;
+  function compare(cur,prev,unit){if(prev===0)return cur>0?'+'+cur+unit:'持平';var pct=Math.round((cur-prev)/prev*100);return(pct>=0?'+':'')+pct+'% ('+cur+'/'+prev+unit+')'}
+  /* 分钟数两边都是 0 时标「两边都未记」，而不是显示「持平」——
+     「持平」会让人以为有过对比，实际是两期都没数据。 */
+  var minCmp=(totalMin===0&&prevMin===0&&(weekRecs.length||prevRecs.length))
+    ?'两边都未记'
+    :compare(totalMin,prevMin,'分');
+  html+='<div class="week-compare">环比上周：投入量 '+compare(totalAmt,prevAmt,'')+' ｜ 打卡天数 '+compare(dayCount,prevDayCount,'天')+' ｜ 分钟数 '+minCmp+'</div>';
+
+  /* ===== 本周打卡明细 =====
+     ⚠️ 之前这里只有上面三个汇总数字，**没有任何记录列表** —— 用户报「本周打卡看不到今天
+     打的卡」，查下来不是数据丢了、也不是被孤儿过滤误伤，而是这一页从来没渲染过明细。
+     汇总数字（投入量/天数）用的是全量数据，所以数字是对的、今天也确实算进去了，
+     只是界面上没有地方能看到「今天打了哪几笔」。
+     现在按日期倒序（最近的在上）平铺列出，今天排最前。 */
+  html+=renderWeekRecords(weekRecs,wsDate,today);
+
+  /* Find existing weekly record */
+  var existing=S.weeklies.find(function(w){return dkey(parseDate(w['周开始日期']))===wsKey});
+  var canEdit=S.weekOffset>=0;
+
+  html+='<div class="card card-body">';
+  html+='<div class="form-group"><label class="form-label">保持</label><textarea class="form-textarea" id="wr_keep" '+(canEdit?'':'disabled')+'>'+(existing?existing['保持']||'':'')+'</textarea></div>';
+  html+='<div class="form-group"><label class="form-label">问题</label><textarea class="form-textarea" id="wr_prob" '+(canEdit?'':'disabled')+'>'+(existing?existing['问题']||'':'')+'</textarea></div>';
+  html+='<div class="form-group"><label class="form-label">尝试</label><textarea class="form-textarea" id="wr_try" '+(canEdit?'':'disabled')+'>'+(existing?existing['尝试']||'':'')+'</textarea></div>';
+  html+='<div class="form-group"><label class="form-label">下周预案</label><textarea class="form-textarea" id="wr_plan" '+(canEdit?'':'disabled')+'>'+(existing?existing['下周预案']||'':'')+'</textarea></div>';
+  if(canEdit)html+='<button class="btn btn-primary btn-block" onclick="saveWeekly(\''+wsKey+'\','+(existing?"'"+existing._id+"'":'null')+')">'+ic('check',16)+'保存复盘</button>';
+  html+='</div>';
+
+  html+='<div style="margin-top:12px"><button class="btn btn-outline btn-block" onclick="generateWeeklyText()">'+ic('copy',16)+'一键生成周报文本</button></div>';
+  html+='<div id="weekly-text-output" style="margin-top:8px"></div>';
+
+  el.innerHTML=html;
+  /* 把本周口径数据挂到状态里，供 generateWeeklyText 读取，避免超长内联参数 */
+  S.weekCtx={wsKey:wsKey,wsLabel:fmtDate(wsKey),weLabel:fmtDate(weKey),
+    amt:trimNum(totalAmt),days:dayCount,mins:trimNum(totalMin),
+    cmpAmt:compare(totalAmt,prevAmt,''),cmpDays:compare(dayCount,prevDayCount,'天'),cmpMins:compare(totalMin,prevMin,'分'),
+    detail:weekDetailText(weekRecs,today)};
+  if(canEdit){
+    restoreForm('wk'+wsKey,['wr_keep','wr_prob','wr_try','wr_plan']);
+    cacheForm('wk'+wsKey,['wr_keep','wr_prob','wr_try','wr_plan']);
+  }
+}
+
+function renderMine(){
+  var el=document.getElementById('tab-mine');
+  var syncBadge=getSyncBadgeHTML();
+  var lastTime=S.lastSync?(''+S.lastSync.getFullYear()+'-'+String(S.lastSync.getMonth()+1).padStart(2,'0')+'-'+String(S.lastSync.getDate()).padStart(2,'0')+' '+String(S.lastSync.getHours()).padStart(2,'0')+':'+String(S.lastSync.getMinutes()).padStart(2,'0')):'尚未同步';
+  var online=S.sync==='synced';
+  var counts='目标 '+S.goals.length+' 个 ｜ 打卡记录 '+S.checkins.length+' 条 ｜ 周复盘 '+S.weeklies.length+' 篇';
+  var ro=S.readonly;
+  var orphanCnt=findOrphanCheckins().length;
+
+  var html='';
+  /* 只读时最先把「去登录」摆在最上面，用户一眼就知道下一步点哪 */
+  if(ro)html+=needLoginNoticeHtml();
+  html+='<div class="card card-body">';
+  html+='<div style="font-size:15px;font-weight:600;margin-bottom:12px">数据存储</div>';
+  html+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">'+syncBadge+'<span style="font-size:13px;color:var(--muted)">最近同步：'+lastTime+'</span></div>';
+  html+='<div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:12px">'+counts+'</div>';
+  html+='<div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:12px;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm)">'+
+    '数据保存在这台设备的浏览器里（localStorage），新建目标 / 打卡 / 补记 / 删除 / 保存周复盘都会立即写入，刷新和关机都不会丢。换设备、换浏览器或清理浏览数据会丢，请定期用下方「备份与迁移」导出一份。'+
+    (ro?'<br/><b style="color:var(--amber)">当前是只读模式：能看数据，存不了。登录后写入自动恢复。</b>':
+      (online?'':'<br/><b style="color:var(--danger)">当前未连接：写入会失败，请检查网络后重试。</b>'))+
+  '</div>';
+  html+=ro
+    ?'<button class="btn btn-primary btn-block" onclick="goLogin()">'+ic('lock',16)+'登录后开始记录</button>'
+    :'<button class="btn btn-outline btn-block" onclick="manualSync()">'+ic('sync',16)+'手动重新同步</button>';
+  if(ro)html+='<button class="btn btn-outline btn-block" style="margin-top:8px" onclick="manualSync()">'+ic('sync',16)+'重新检测连接</button>';
+  html+='</div>';
+
+  /* ===== 外观主题 =====
+     与顶栏那个圆形按钮是同一个状态的两种入口：
+     顶栏适合随手切，这里是「明确选择」，三项平铺所以看得见当前处于哪种模式。 */
+  html+='<div class="card card-body" style="margin-top:12px">';
+  html+='<div style="display:flex;align-items:center;gap:6px;font-size:15px;font-weight:600;margin-bottom:12px">'+ic('moon',16)+'外观主题</div>';
+  html+='<div class="theme-seg" id="theme-seg" role="group" aria-label="外观主题">';
+  /* 三段选择器：把「深色」放首位并标注默认，用户一眼知道不选时会落在哪 */
+  [['dark','深色','moon'],['light','浅色','sun'],['auto','跟随系统','auto']].forEach(function(t){
+    html+='<button type="button" data-mode="'+t[0]+'" aria-pressed="false" onclick="setTheme(&quot;'+t[0]+'&quot;)">'+ic(t[2],20)+'<span>'+t[1]+'</span></button>';
+  });
+  html+='</div>';
+  html+='<div class="tiny" style="padding:10px 0 0">选择会记在这台设备上，默认是<strong>深色</strong>。选「跟随系统」时，系统切换深/浅色后本页会自动跟着变，不用刷新。</div>';
+  html+='</div>';
+
+  /* 未登录时列表里可能还躺着用户刚才填过、但没保存成功的内容 */
+  var left=readLeftover();
+  if(left&&left.forms&&Object.keys(left.forms).length){
+    html+='<div class="card card-body" style="margin-top:12px">';
+    html+='<div style="font-size:15px;font-weight:600;margin-bottom:8px">'+ic('clock',16)+' 还有内容没保存</div>';
+    html+='<div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:10px">上次填写的内容暂存在这台设备上，登录回到页面会自动填回。也可以先复制走，避免丢失。</div>';
+    var lines=[];
+    Object.keys(left.forms).forEach(function(gid){
+      var f=left.forms[gid],g=goalById(gid);
+      /* 备注一并列出来：暂存清单的作用就是「让用户确认自己填的东西都还在」，
+         漏掉备注的话，写了较长一段备注的用户会以为那段字丢了。 */
+      lines.push((g?g['目标名称']:'（目标已删除）')+'：'+f.amt+(g?' '+(g['单位']||''):'')+(f.min?'，'+f.min+' 分钟':'')+' · '+fmtDate(f.date)+(f.note?('　备注：'+String(f.note).replace(/\s+/g,' ')):''));
+    });
+    html+='<div style="font-size:13px;line-height:1.9;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm)">'+lines.map(esc).join('<br/>')+'</div>';
+    html+='<button class="btn btn-outline btn-block" style="margin-top:10px" onclick="clearLeftoverNow()">'+ic('trash',16)+'丢弃这些内容</button>';
+    html+='</div>';
+  }
+
+  html+='<div class="card card-body" style="margin-top:12px">';
+  html+='<div style="font-size:15px;font-weight:600;margin-bottom:12px">数据管理</div>';
+  /* 有孤儿记录时先把「为什么有的数字对不上」讲清楚，再给按钮。
+     以前这个按钮点下去毫无反馈（筛选条件恒为空），用户只能反复点、看不出所以然。 */
+  if(orphanCnt>0){
+    html+='<div style="font-size:12px;color:var(--muted);line-height:1.7;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:12px">'+
+      '<b style="color:var(--amber)">有 '+orphanCnt+' 条打卡记录所属的目标已被删除</b><br/>'+
+      '它们不属于任何现存目标，界面上看不到、也删不掉，但会混进周报和热力图的统计里，让数字对不上。'+
+      '点下面的按钮可以一次清理干净（不会影响你现在还留着的目标）。</div>';
+  }
+  html+='<button class="btn btn-outline btn-block" style="margin-bottom:12px"'+(ro?' disabled':'')+' onclick="clearExamples()">'+ic('trash',16)+'清空示例数据'+(orphanCnt>0?'（'+orphanCnt+' 条待清理）':'')+'</button>';
+  html+='<div style="padding-top:12px;border-top:1px solid var(--border)"><label class="form-label">清空全部数据</label><input class="form-input" id="clear-all-input" placeholder="输入「清空」两字确认" style="margin-bottom:8px"'+(ro?' disabled':'')+'/><button class="btn btn-danger btn-block"'+(ro?' disabled':'')+' onclick="clearAll()">确认清空</button>';
+  html+='<div class="tiny" style="padding:8px 0 0">清空会删除全部目标、打卡记录和周复盘，不可恢复。</div></div>';
+  if(ro)html+='<div class="tiny" style="padding:8px 0 0;color:var(--amber)">只读模式下不可用，登录后恢复。</div>';
+  html+='</div>';
+
+  html+='<div class="card card-body" style="margin-top:12px">';
+  html+='<div style="font-size:15px;font-weight:600;margin-bottom:12px">添加到手机主屏幕</div>';
+  html+='<div class="instructions"><ol>';
+  html+='<li>在手机浏览器中打开本页面的在线链接</li>';
+  html+='<li>点击浏览器底部的<strong>分享</strong>按钮（iOS）或右上角<strong>菜单</strong>（安卓）</li>';
+  html+='<li>选择<strong>「添加到主屏幕」</strong>，即可像 APP 一样使用</li>';
+  html+='</ol></div>';
+  html+='<div class="tiny" style="padding:8px 0 0">添加到主屏幕后可像 APP 一样打开；数据存在本机，换设备请先用「备份与迁移」导出。</div>';
+  html+='</div>';
+
+  el.innerHTML=html;
+}
+
+window.clearLeftoverNow=function(){clearLeftover();renderMine();showToast('已丢弃暂存内容','success')};
+
+window.manualSync=function(){
+  _isLoading=false;
+  S.sync='loading';
+  _dbRetryCount=0;
+  updateSyncBadge();
+  loadAll();
+  showToast('正在重新同步…');
+};
+
+/* 同步状态只有一处判定，多个地方展示（品牌条徽标 + 工具条徽标 + 「我的」页）。
+   ⚠️ 徽标是「宿主元素」，它自己就带 sync-badge 与 js-sync-badge 类，
+   若把 getSyncBadgeHTML() 的结果整个塞进去，会套出两层 .sync-badge，
+   样式被叠加两次（字重、内边距都会错）。所以拆成两种输出方式。
+   ⚠️ 更新时用 classList 增删状态类，不能整串覆写 className —— 那会把 js-sync-badge
+   一起冲掉，第二次更新就找不到元素了（静默失效，页面看上去只是「状态不刷新」）。 */
+function syncState(){
+  if(S.readonly)return{cls:'offline',icon:'lock',label:'只读模式'};
+  if(S.sync==='synced')return{cls:'synced',icon:'check',label:'本地已保存'};
+  if(S.sync==='syncing')return{cls:'syncing',icon:'sync',label:'同步中'};
+  if(S.sync==='loading')return{cls:'syncing',icon:'sync',label:'连接中'};
+  return{cls:'offline',icon:'alert',label:'未连接'};
+}
+function getSyncBadgeHTML(){
+  var s=syncState();
+  return'<span class="sync-badge '+s.cls+'">'+ic(s.icon,14)+'<span class="sb-label">'+s.label+'</span></span>';
+}
+function updateSyncBadge(){
+  var s=syncState();
+  var list=document.querySelectorAll('.js-sync-badge');
+  for(var i=0;i<list.length;i++){
+    var el=list[i];
+    el.classList.remove('synced','syncing','offline');
+    el.classList.add(s.cls);
+    el.innerHTML=ic(s.icon,12)+'<span class="sb-label">'+s.label+'</span>';
+    el.title=s.label;
+  }
+}
+
+/* ====== Actions ====== */
+window.openNewGoal=function(){
+  var colorOpts=Object.keys(COLORS);
+  var html='<div class="modal-head"><div class="modal-title">新建目标</div><button class="modal-close" onclick="hideModal()">'+ic('close',20)+'</button></div>';
+  html+='<div class="form-group"><label class="form-label">目标名称 *</label><input class="form-input" id="ng_name" data-sp-bindable="database" data-sp-database-id="OereifjY46k3XWmQX6KVfK" placeholder="如：读完《人类简史》"/></div>';
+  html+='<div class="form-row"><div class="form-group"><label class="form-label">单位 *</label><input class="form-input" id="ng_unit" placeholder="页 / 个 / 集 / 小时"/></div>';
+  html+='<div class="form-group"><label class="form-label">总量 *</label><input class="form-input" type="number" id="ng_total" placeholder="如 440" min="1"/></div></div>';
+  html+='<div class="form-group"><label class="form-label">截止日期 *</label><input class="form-input" type="date" id="ng_deadline"/></div>';
+  html+='<div class="form-group"><label class="form-label">配色</label><div class="color-picker" id="ng_color">';
+  colorOpts.forEach(function(c,i){var cl=COLORS[c];html+='<div class="color-opt'+(i===0?' selected':'')+'" data-color="'+c+'" style="background:'+cl.p+'"></div>'});
+  html+='</div></div>';
+  html+='<div class="form-group"><label class="form-label">最大障碍（选填）</label><textarea class="form-textarea" id="ng_obstacle" placeholder="如：下班后太累，一到家就躺着"></textarea><div class="form-hint">写具体一点，比「没时间」更有用</div></div>';
+  html+='<div class="form-group"><label class="form-label">如果它出现，我就……（选填）</label><textarea class="form-textarea" id="ng_strategy" placeholder="如：改在早晨通勤时看 10 页"></textarea><div class="form-hint">这条会显示在提醒卡片上，漏卡时直接提醒你</div></div>';
+  html+='<button class="btn btn-primary btn-block" onclick="createGoal()">'+ic('check',16)+'创建目标</button>';
+  showModal(html);
+  document.querySelectorAll('.color-opt').forEach(function(el){el.onclick=function(){document.querySelectorAll('.color-opt').forEach(function(e){e.classList.remove('selected')});this.classList.add('selected')}});
+  var dl=new Date();dl.setMonth(dl.getMonth()+1);document.getElementById('ng_deadline').value=dkey(dl);
+  restoreForm('new',['ng_name','ng_unit','ng_total','ng_obstacle','ng_strategy']);
+  cacheForm('new',['ng_name','ng_unit','ng_total','ng_obstacle','ng_strategy']);
+};
+
+window.createGoal=function(){
+  var name=document.getElementById('ng_name').value.trim();
+  var unit=document.getElementById('ng_unit').value.trim();
+  var total=parseFloat(document.getElementById('ng_total').value);
+  var deadline=document.getElementById('ng_deadline').value;
+  var colorEl=document.querySelector('.color-opt.selected');
+  var color=colorEl?colorEl.getAttribute('data-color'):'purple';
+  var obstacle=document.getElementById('ng_obstacle').value.trim();
+  var strategy=document.getElementById('ng_strategy').value.trim();
+  if(!name){showToast('请填写目标名称','error');return}
+  if(!unit){showToast('请填写单位','error');return}
+  if(!total||total<=0){showToast('请填写有效的总量','error');return}
+  if(!deadline){showToast('请选择截止日期','error');return}
+  /* 只收 YYYY-MM-DD：日期控件的值可能是被补记/暂存填进来的脏数据，
+     存进去会变成 Invalid Date，回头渲染成「未设置」还不报错 */
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(deadline)){showToast('截止日期格式不对，请重新选择','error');return}
+  if(parseDate(deadline)<new Date(new Date().setHours(0,0,0,0))){showToast('截止日期不能早于今天','error');return}
+
+  var props={};
+  props['目标名称']={text:name};
+  props['单位']={text:unit};
+  props['总量']={number:total};
+  props['截止日期']={date:deadline};
+  props['配色']={text:color};
+  props['最大障碍']={text:obstacle};
+  props['应对策']={text:strategy};
+  props['标签']={select:'正常'};
+  props['状态']={select:'进行中'};
+  props['创建日期']={date:todayKey()};
+
+  if(!db){showToast('当前环境无数据服务，请打开线上链接使用','error');return}
+  /* 未登录会整页跳登录，先把用户填的目标内容存下来（表单已有 cacheForm，这里再兜一层写回前快照） */
+  cacheForm('new',['ng_name','ng_unit','ng_total','ng_obstacle','ng_strategy']);
+  db.addRecord({databaseId:DATABASE_ID,properties:props}).then(function(){
+    showToast('目标创建成功','success');clearFormCache('new');hideModal();loadAll();
+  }).catch(function(err){handleWriteError('创建目标',err)});
+};
+
+/* 「立即打卡」：滚动到目标卡片并聚焦数量输入框（今日页为行内打卡，无需弹窗） */
+window.openCheckin=function(goalId){
+  var amtEl=document.getElementById('amt_'+goalId);
+  if(amtEl){
+    amtEl.scrollIntoView({behavior:'smooth',block:'center'});
+    setTimeout(function(){amtEl.focus();amtEl.select()},320);
+    return;
+  }
+  var g=goalById(goalId);
+  if(!g)return;
+  showToast('「'+g['目标名称']+'」已达上限或已完成，无需打卡','error');
+};
+
+/* A4/A5：行内打卡 —— 支持日期下拉（今天/昨天/…/6天前），补记自动标「补」；
+   达标判定用「前态未完成 → 后态完成」的边沿检测 */
+window.doCheckin=function(goalId){
+  var g=goalById(goalId);
+  if(!g)return;
+  var amtEl=document.getElementById('amt_'+goalId);
+  var minEl=document.getElementById('min_'+goalId);
+  var dateEl=document.getElementById('date_'+goalId);
+  var noteEl=document.getElementById('note_'+goalId);
+  if(!amtEl)return;
+  var amount=parseFloat(amtEl.value);
+  if(isNaN(amount)||amount<0){showToast('完成数量需为有效正数','error');amtEl.focus();return}
+  var minutes=0;
+  if(minEl&&minEl.value!==''){
+    minutes=parseFloat(minEl.value);
+    if(isNaN(minutes)||minutes<0||minutes>1440){showToast('用时需为 0–1440 分钟','error');minEl.focus();return}
+  }
+  /* 备注可选，但**不静默截断**：超过上限先告知再截，否则用户写了长段内容、
+     存下去少了一截却完全没有任何提示（textarea 的 maxlength 只在交互输入时生效，
+     粘贴/脚本改值时并不拦）。 */
+  var note=noteEl?String(noteEl.value||'').trim():'';
+  if(note.length>500){
+    note=note.slice(0,500);
+    showToast('备注超过 500 字，已保留前 500 字','error');
+  }
+  var date=(dateEl&&dateEl.value)?dateEl.value:todayKey();
+  var earliest=dkey(addDays(new Date(),-6));
+  if(date<earliest||date>todayKey())date=todayKey();
+  var isBackfill=date<todayKey();
+
+  var wasComplete=isGoalComplete(g);
+  var props={};
+  props['目标ID']={text:goalId};
+  props['目标名称']={text:g['目标名称']};
+  props['日期']={date:date};
+  props['数量']={number:amount};
+  props['分钟数']={number:minutes};
+  props['是否补记']={checkbox:isBackfill};
+  /* 「备注」从补记标记改为用户自由文本（第十二阶段）。
+     补记语义由上面的「是否补记」checkbox 独立承担，不再挤占备注字段。 */
+  props['备注']={text:note};
+
+  if(!db){showToast('当前环境无数据服务，请打开线上链接使用','error');return}
+  amtEl.disabled=true;
+  /* 同时锁住打卡按钮本身：spinner 让「正在写」看得见，也堵掉连点造成的重复打卡
+     （原先只 disable 了输入框，按钮没锁，网络慢时连点两下会写进两条一样的记录）。
+     ⚠️ 用 closest('.checkin') 就地定位，不能用 querySelector('.checkin-btn') ——
+        一屏上可能有好几个目标卡片，全局查询会锁到别人的按钮上。 */
+  var _ckWrap=amtEl.closest?amtEl.closest('.checkin'):null;
+  var _ckBtn=_ckWrap?_ckWrap.querySelector('.checkin-btn'):null;
+  setBtnBusy(_ckBtn,true);
+  /* 未登录时平台会整页跳登录，内存里的输入全丢 —— 先把这次要写的内容存起来 */
+  var _left={t:Date.now(),date:todayKey(),forms:{}};
+  /* 暂存里必须带上备注 —— 少存一个字段，用户登录回来后就会看到
+     「数量/分钟/日期都填回来了，唯独写的那段备注没了」，这类半丢最难察觉也最恼人。 */
+  _left.forms[goalId]={amt:String(amount),min:minEl?String(minEl.value||''):'',date:date,note:note};
+  db.addRecord({databaseId:'DRuD6oQI5lrK5IhZQS1fzn',properties:props}).then(function(){
+    clearLeftover();
+    var nowComplete=((goalTotal(goalId)+amount)>=(g['总量']||0));
+    showToast(isBackfill?('已补记 '+fmtDateShort(date)+'：+'+trimNum(amount)+' '+g['单位']):('已打卡 +'+trimNum(amount)+' '+g['单位']),'success');
+    if(!wasComplete&&nowComplete){
+      showConfetti();
+      showToast('目标「'+g['目标名称']+'」达成，恭喜！','success');
+    }
+    S._justSynced=true;
+    setBtnBusy(_ckBtn,false);
+    /* 成功回弹：门禁交给渲染层消费一次（渲染层据此给按钮挂 is-success）。
+       另配一个兜底清除 —— 万一这一轮渲染没能消费掉（例如用户中途切了 Tab），
+       标记不会残留到下一次刷新，否则那颗按钮会在不相干的时刻自己弹一下。 */
+    S._popId=goalId;
+    setTimeout(function(){if(S._popId===goalId)S._popId=null},2000);
+    loadAll();
+  }).catch(function(err){handleWriteError('打卡',err,_left);amtEl.disabled=false;setBtnBusy(_ckBtn,false)});
+};
+
+window.deleteRecord=function(recordId){
+  if(!confirm('确定删除这条记录？'))return;
+  if(!db){showToast('当前环境无数据服务，请打开线上链接使用','error');return}
+  db.deleteRecord({databaseId:'DRuD6oQI5lrK5IhZQS1fzn',recordId:recordId}).then(function(){
+    showToast('已删除','success');loadAll();
+  }).catch(function(err){handleWriteError('删除记录',err)});
+};
+
+/* ===== 学习备注的编辑（第十二阶段）=====
+   入口是记录行上那条「备注行」——整行可点，有备注就是改、没备注就是补写。
+   为什么不做成独立的小按钮：小按钮在手机上够不到 44px 触控铁律，
+   而整行点击的可点面积天然够大。 */
+window.openEditNote=function(recordId){
+  var c=S.checkins.find(function(x){return x._id===recordId});
+  if(!c){showToast('这条记录已不存在，请重新同步后再试','error');return}
+  var g=goalById(c['目标ID']);
+  var unit=g?(g['单位']||''):'';
+  var d=parseDate(c['日期']);
+  var meta=(g?g['目标名称']:'（目标已删除）')+' · '+
+    (isInvalid(d)?'日期缺失':(fmtDateShort(dkey(d))+' 周'+weekDay(d)))+
+    ' · +'+trimNum(c['数量']||0)+' '+unit+
+    (c['分钟数']>0?(' · 用时 '+c['分钟数']+' 分钟'):'')+
+    (c['是否补记']?' · 补记':'');
+  var cur=noteOf(c);
+  var html='<div class="modal-head"><div class="modal-title">'+(cur?'修改学习备注':'补写学习备注')+'</div><button class="modal-close" onclick="hideModal()">'+ic('close',20)+'</button></div>';
+  /* 把「改的是哪一条」写清楚：一屏可能有好几条同目标的记录，
+     只显示一个空文本框的话，用户没法确认自己改的是今天那条还是昨天那条。 */
+  html+='<div class="tiny" style="padding:0 0 10px">'+esc(meta)+'</div>';
+  html+='<div class="form-group"><label class="form-label">当天具体学了什么</label>'+
+    '<textarea class="form-textarea" id="en_note" rows="5" maxlength="500" style="resize:vertical;line-height:1.55;font-family:inherit" placeholder="例：第 12–35 页，重点看懂 agg 的用法">'+esc(cur)+'</textarea>'+
+    '<div class="tiny" style="padding:6px 0 0">最多 500 字。这段内容会出现在打卡记录、本周明细和「学习日志」里。</div></div>';
+  if(S.readonly)html+='<div class="tiny" style="padding:0 0 10px;color:var(--amber)">当前是只读模式，备注存不进去。登录后即可修改。</div>';
+  html+='<div style="display:flex;gap:8px">'+
+    '<button class="btn btn-outline" style="flex:1" onclick="hideModal()">取消</button>'+
+    '<button class="btn btn-primary" style="flex:1" id="en_save"'+(S.readonly?' disabled':'')+' onclick="saveNote(\''+recordId+'\')">保存备注</button>'+
+  '</div>';
+  showModal(html);
+  /* 打开即聚焦、光标落到末尾：补写场景下用户是接着往下写，不是要覆盖全文 */
+  setTimeout(function(){
+    var el=document.getElementById('en_note');
+    if(!el||!el.focus)return;
+    el.focus();
+    try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){}
+  },60);
+};
+
+window.saveNote=function(recordId){
+  var el=document.getElementById('en_note');
+  if(!el)return;
+  var note=String(el.value||'').trim();
+  if(note.length>500){
+    note=note.slice(0,500);
+    showToast('备注超过 500 字，已保留前 500 字','error');
+  }
+  if(!db){showToast('当前环境无数据服务，请打开线上链接使用','error');return}
+  if(S.readonly){showToast('只读模式：请先登录再改备注','error');return}
+  var btn=document.getElementById('en_save');
+  setBtnBusy(btn,true);
+  /* 只提交「备注」这一个字段。
+     ⚠️ 刻意不把数量/分钟/日期一起带上：那样「改备注」就变成一次隐式的全字段重写，
+        万一某个字段的读取/类型有偏差（本项目踩过：字段类型不匹配时服务端静默丢值），
+        改一句备注就会顺带把别的字段写坏。 */
+  db.updateRecord({databaseId:'DRuD6oQI5lrK5IhZQS1fzn',recordId:recordId,properties:{'备注':{text:note}}}).then(function(){
+    setBtnBusy(btn,false);
+    hideModal();
+    showToast(note?'备注已保存':'备注已清空','success');
+    loadAll();
+  }).catch(function(err){
+    setBtnBusy(btn,false);
+    /* 失败时**不关弹窗**：用户刚敲的那段字还在框里。
+       关掉的话字就跟着弹窗一起没了（这条是「破坏性操作静默失败」的同类陷阱）。 */
+    handleWriteError('保存备注',err);
+  });
+};
+
+window.openEditGoal=function(goalId){
+  var g=S.goals.find(function(x){return x._id===goalId});
+  if(!g)return;
+  S.editGoalId=goalId;
+  var colorOpts=Object.keys(COLORS);
+  var html='<div class="modal-head"><div class="modal-title">编辑目标</div><button class="modal-close" onclick="hideModal()">'+ic('close',20)+'</button></div>';
+  html+='<div class="form-group"><label class="form-label">目标名称</label><input class="form-input" id="eg_name" value="'+(g['目标名称']||'')+'"/></div>';
+  html+='<div class="form-row"><div class="form-group"><label class="form-label">单位</label><input class="form-input" id="eg_unit" value="'+(g['单位']||'')+'"/></div>';
+  html+='<div class="form-group"><label class="form-label">总量</label><input class="form-input" type="number" id="eg_total" value="'+(g['总量']||0)+'" min="1"/></div></div>';
+  /* 截止日读不出来时不能塞 dkey(Invalid Date) —— 会得到字面量 "NaN-NaN-NaN" 填进日期框，
+     用户一保存就把脏值写回库里。这种情况留空，让用户重新选。 */
+  var dlParse=parseDate(g['截止日期']);
+  var dlVal=isInvalid(dlParse)?'':dkey(dlParse);
+  html+='<div class="form-group"><label class="form-label">截止日期</label><input class="form-input" type="date" id="eg_deadline" value="'+dlVal+'"/>'+
+        (dlVal?'':'<div class="form-hint" style="color:var(--amber)">原目标没有截止日期，请选一个后保存</div>')+'</div>';
+  html+='<div class="form-group"><label class="form-label">配色</label><div class="color-picker" id="eg_color">';
+  colorOpts.forEach(function(c){var cl=COLORS[c];html+='<div class="color-opt'+(g['配色']===c?' selected':'')+'" data-color="'+c+'" style="background:'+cl.p+'"></div>'});
+  html+='</div></div>';
+  html+='<div class="form-group"><label class="form-label">障碍</label><textarea class="form-textarea" id="eg_obstacle">'+(g['最大障碍']||'')+'</textarea></div>';
+  html+='<div class="form-group"><label class="form-label">对策</label><textarea class="form-textarea" id="eg_strategy">'+(g['应对策']||'')+'</textarea></div>';
+  html+='<div style="display:flex;gap:8px"><button class="btn btn-primary" style="flex:1" onclick="saveEditGoal()">'+ic('check',16)+'保存</button>';
+  html+='<button class="btn btn-danger" onclick="confirmDeleteGoal(\''+goalId+'\')">'+ic('trash',16)+'删除</button></div>';
+  showModal(html);
+  document.querySelectorAll('#eg_color .color-opt').forEach(function(el){el.onclick=function(){document.querySelectorAll('#eg_color .color-opt').forEach(function(e){e.classList.remove('selected')});this.classList.add('selected')}});
+};
+
+window.saveEditGoal=function(){
+  var goalId=S.editGoalId;if(!goalId)return;
+  var g=S.goals.find(function(x){return x._id===goalId});if(!g)return;
+  var name=document.getElementById('eg_name').value.trim();
+  var unit=document.getElementById('eg_unit').value.trim();
+  var total=parseFloat(document.getElementById('eg_total').value);
+  var deadline=document.getElementById('eg_deadline').value;
+  var colorEl=document.querySelector('#eg_color .color-opt.selected');
+  var color=colorEl?colorEl.getAttribute('data-color'):'purple';
+  var obstacle=document.getElementById('eg_obstacle').value.trim();
+  var strategy=document.getElementById('eg_strategy').value.trim();
+  if(!name||!unit||!total||!deadline){showToast('请填写必填项','error');return}
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(deadline)){showToast('截止日期格式不对，请重新选择','error');return}
+  var props={};
+  props['目标名称']={text:name};
+  props['单位']={text:unit};
+  props['总量']={number:total};
+  props['截止日期']={date:deadline};
+  props['配色']={text:color};
+  props['最大障碍']={text:obstacle};
+  props['应对策']={text:strategy};
+  if(!db){showToast('当前环境无数据服务，请打开线上链接使用','error');return}
+  cacheForm('eg'+goalId,['eg_name','eg_unit','eg_total','eg_obstacle','eg_strategy']);
+  db.updateRecord({databaseId:DATABASE_ID,recordId:goalId,properties:props}).then(function(){
+    showToast('已保存','success');clearFormCache('eg'+goalId);hideModal();loadAll();
+  }).catch(function(err){handleWriteError('保存目标',err)});
+};
+
+window.confirmDeleteGoal=function(goalId){
+  if(!confirm('删除目标将同时删除所有打卡记录，确定删除？'))return;
+  if(!db){showToast('当前环境无数据服务，请打开线上链接使用','error');return}
+  var recs=goalCheckins(goalId);
+  var promises=recs.map(function(r){return db.deleteRecord({databaseId:'DRuD6oQI5lrK5IhZQS1fzn',recordId:r._id})});
+  Promise.all(promises).then(function(){
+    return db.deleteRecord({databaseId:DATABASE_ID,recordId:goalId});
+  }).then(function(){
+    showToast('目标已删除','success');hideModal();loadAll();
+  }).catch(function(err){handleWriteError('删除目标',err)});
+};
+
+window.changeWeek=function(delta){
+  var newOffset=S.weekOffset+delta;
+  if(newOffset>0)return;
+  S.weekOffset=newOffset;renderWeekly();
+};
+
+window.saveWeekly=function(wsKey,existingId){
+  var keep=document.getElementById('wr_keep').value.trim();
+  var prob=document.getElementById('wr_prob').value.trim();
+  var tr=document.getElementById('wr_try').value.trim();
+  var plan=document.getElementById('wr_plan').value.trim();
+  var weKey=dkey(addDays(parseDate(wsKey),6));
+  var props={};
+  props['周开始日期']={date:wsKey};
+  props['周结束日期']={date:weKey};
+  props['保持']={text:keep};
+  props['问题']={text:prob};
+  props['尝试']={text:tr};
+  props['下周预案']={text:plan};
+  if(!db){showToast('当前环境无数据服务，请打开线上链接使用','error');return}
+  cacheForm('wk'+wsKey,['wr_keep','wr_prob','wr_try','wr_plan']);
+  if(existingId){
+    db.updateRecord({databaseId:'kVj8GOSzCqSOUhes5vYBhg',recordId:existingId,properties:props}).then(function(){
+      showToast('周报已保存','success');clearFormCache('wk'+wsKey);loadAll();
+    }).catch(function(err){handleWriteError('保存周报',err)});
+  }else{
+    db.addRecord({databaseId:'kVj8GOSzCqSOUhes5vYBhg',properties:props}).then(function(){
+      showToast('周报已保存','success');clearFormCache('wk'+wsKey);loadAll();
+    }).catch(function(err){handleWriteError('保存周报',err)});
+  }
+};
+
+window.generateWeeklyText=function(){
+  var c=S.weekCtx;
+  if(!c){showToast('请先打开要生成周报的那一周','error');return}
+  var keep=document.getElementById('wr_keep')?document.getElementById('wr_keep').value.trim():'';
+  var prob=document.getElementById('wr_prob')?document.getElementById('wr_prob').value.trim():'';
+  var tr=document.getElementById('wr_try')?document.getElementById('wr_try').value.trim():'';
+  var plan=document.getElementById('wr_plan')?document.getElementById('wr_plan').value.trim():'';
+  var text='=== 学习周报 ===\n';
+  text+='时间：'+c.wsLabel+' - '+c.weLabel+'\n\n';
+  text+='【本周数据】\n';
+  text+='投入量：'+c.amt+'\n';
+  text+='打卡天数：'+c.days+' 天\n';
+  text+='分钟数：'+c.mins+'\n';
+  text+='环比：投入量 '+c.cmpAmt+' ｜ 打卡天数 '+c.cmpDays+' ｜ 分钟数 '+c.cmpMins+'\n\n';
+  /* 把每日明细一起带上：汇总数字看不出「哪天打了什么」，复盘时最容易缺的就是这一块 */
+  text+='【打卡明细】\n'+(c.detail||'（本周没有打卡记录）')+'\n\n';
+  text+='【保持】\n'+(keep||'（待填写）')+'\n\n';
+  text+='【问题】\n'+(prob||'（待填写）')+'\n\n';
+  text+='【尝试】\n'+(tr||'（待填写）')+'\n\n';
+  text+='【下周预案】\n'+(plan||'（待填写）')+'\n';
+  var out=document.getElementById('weekly-text-output');
+  if(out){
+    out.innerHTML='<div class="card card-body"><textarea class="form-textarea" style="min-height:200px" id="weekly-text">'+text.replace(/</g,'&lt;')+'</textarea><button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="copyText(\'weekly-text\')">'+ic('copy',14)+'复制</button></div>';
+  }
+};
+
+window.copyText=function(id){
+  var el=document.getElementById(id);if(!el)return;
+  el.select();document.execCommand('copy');showToast('已复制','success');
+};
+
+window.__dbgFindOrphans=function(){
+  return findOrphanCheckins().map(function(r){
+    return{_id:r._id,日期:r['日期'],数量:r['数量'],单位:r['单位'],目标ID:r['目标ID']};
+  });
+};
+
+window.clearExamples=function(){
+  if(!db){showToast('当前环境无数据服务，请打开线上链接使用','error');return}
+  /* ⚠️ 原实现筛的是 g['标签']==='示例' —— 但「标签」字段早先是 text 类型、
+     写入被静默丢弃，三个预设目标的标签全是空串，筛选结果恒为空数组，
+     forEach 一次都不执行，于是点了「清空示例数据」什么都没发生。
+     改成按「孤儿打卡记录」清理：目标ID 已不在 goals 里的记录（示例目标被删后留下的）。
+     这类记录留下的唯一痕迹就是周报/看板里那些对不上号的数字。 */
+  var orphans=findOrphanCheckins();
+  if(!orphans.length){showToast('没有需要清理的示例数据','success');return}
+  /* 按日期聚合再列出来：用户点确认前应该看得见「删的是哪几天」，
+     否则这仍是个摸黑操作 —— 上一版正因为什么都看不见才被忽略过去。 */
+  var byDate={};
+  orphans.forEach(function(r){
+    var dk=dkey(parseDate(r['日期']));
+    if(!byDate[dk])byDate[dk]={n:0,ids:[]};
+    byDate[dk].n++;byDate[dk].ids.push(r._id);
+  });
+  var lines=Object.keys(byDate).sort().map(function(dk){
+    return'  · '+dk+'　'+byDate[dk].n+' 条';
+  });
+  if(!confirm('确定清理示例数据？\n\n将删除 '+orphans.length+' 条「所属目标已被删除」的打卡记录：\n'+lines.join('\n')+'\n\n现有目标及其打卡记录不受影响，删除后不可恢复。'))return;
+  var promises=orphans.map(function(r){
+    return db.deleteRecord({databaseId:'DRuD6oQI5lrK5IhZQS1fzn',recordId:r._id});
+  });
+  Promise.all(promises).then(function(){
+    showToast('已清理 '+orphans.length+' 条示例记录','success');loadAll();
+  }).catch(function(err){handleWriteError('清空示例',err)});
+};
+
+window.clearAll=function(){
+  var input=document.getElementById('clear-all-input');
+  if(!input||input.value.trim()!=='清空'){showToast('请输入"清空"确认','error');return}
+  if(!confirm('确定清空全部数据？此操作不可恢复！'))return;
+  if(!db){showToast('当前环境无数据服务，请打开线上链接使用','error');return}
+  var p1=S.checkins.map(function(r){return db.deleteRecord({databaseId:'DRuD6oQI5lrK5IhZQS1fzn',recordId:r._id})});
+  var p2=S.goals.map(function(g){return db.deleteRecord({databaseId:DATABASE_ID,recordId:g._id})});
+  var p3=S.weeklies.map(function(w){return db.deleteRecord({databaseId:'kVj8GOSzCqSOUhes5vYBhg',recordId:w._id})});
+  Promise.all(p1.concat(p2).concat(p3)).then(function(){
+    showToast('全部数据已清空','success');S.weekOffset=0;loadAll();
+  }).catch(function(err){handleWriteError('清空数据',err)});
+};
+
+/* ====== Form Draft Cache (localStorage) ====== */
+function cacheForm(prefix,ids){
+  ids.forEach(function(id){
+    var el=document.getElementById(id);
+    if(!el||el.disabled)return;
+    var key='form_'+prefix+'_'+id;
+    el.addEventListener('input',function(){
+      try{localStorage.setItem(key,el.value)}catch(e){}
+    });
+  });
+}
+function restoreForm(prefix,ids){
+  ids.forEach(function(id){
+    var el=document.getElementById(id);
+    if(!el)return;
+    try{
+      var v=localStorage.getItem('form_'+prefix+'_'+id);
+      if(v!==null)el.value=v;
+    }catch(e){}
+  });
+}
+function clearFormCache(prefix){
+  var pre='form_'+prefix+'_';
+  try{
+    var keys=[];
+    for(var i=0;i<localStorage.length;i++){
+      var k=localStorage.key(i);
+      if(k&&k.indexOf(pre)===0)keys.push(k);
+    }
+    keys.forEach(function(k){localStorage.removeItem(k)});
+  }catch(e){}
+}
+
+/* ====== UI Helpers ====== */
+function showModal(html){var o=document.getElementById('modal-overlay');var c=document.getElementById('modal-content');c.innerHTML=html;o.classList.remove('hidden')}
+function hideModal(){document.getElementById('modal-overlay').classList.add('hidden')}
+function showToast(msg,type){var t=document.getElementById('toast');t.textContent=msg;t.className='toast'+(type?' '+type:'');setTimeout(function(){t.classList.add('hidden')},3000)}
+/* 写失败统一出口：区分「需要登录」和「真失败」。
+   需要登录时不能只弹 toast —— 平台随后会整页跳登录，toast 会消失、用户以为卡死了。
+   所以：置 readonly → 重渲染出黄色告警条（带「去登录」按钮）→ 再弹一句 toast 说明。 */
+function handleWriteError(action,err,leftover){
+  var msg=String((err&&err.message)||err||'');
+  console.error('[db] '+action+':',err);
+  var isAuth=(msg.indexOf('401')>=0||msg.indexOf('not login')>=0||msg.toLowerCase().indexOf('login')>=0||msg.indexOf('AUTH')>=0||/^\{\}$/.test(msg));
+  if(isAuth){
+    S.readonly=true;
+    if(leftover)saveLeftover(leftover);
+    renderAll();
+    showToast('还没登录，内容已暂存 · 登录后自动填回','error');
+    var bar=document.querySelector('#tab-today .alert-card.yellow');
+    if(bar&&bar.scrollIntoView)try{bar.scrollIntoView({block:'center'})}catch(e){bar.scrollIntoView()}
+  }else if(msg.indexOf('offline')>=0||msg.indexOf('timeout')>=0||msg.indexOf('timed out')>=0){
+    showToast('网络超时，'+action+'失败，请重试','error');
+  }else{
+    showToast(action+'失败，请重试','error');
+  }
+}
+function showConfetti(){
+  /* 彩带直接用目标配色令牌，跟着主题走；暗色下自动换成提亮版，
+     否则深底上撒一把深紫彩带根本看不见 */
+  var colors=COLOR_KEYS.map(function(k){return 'var(--gc-'+k+')'});
+  var c=document.getElementById('confetti-container');
+  for(var i=0;i<50;i++){
+    var p=document.createElement('div');
+    p.className='confetti-piece';
+    p.style.left=Math.random()*100+'vw';
+    p.style.background=colors[Math.floor(Math.random()*colors.length)];
+    p.style.animationDelay=Math.random()*0.5+'s';
+    p.style.animationDuration=(2+Math.random()*2)+'s';
+    p.style.width=(6+Math.random()*8)+'px';
+    p.style.height=p.style.width;
+    if(Math.random()>0.5)p.style.borderRadius='50%';
+    c.appendChild(p);
+    setTimeout(function(el){return function(){el.remove()}}(p),4000);
+  }
+}
+
+/* ====== Tab Switching ====== */
+/* 吸顶工具条的标题与主操作按钮随 Tab 变化。
+   这段 DOM 在 .content 里、且在 .tab-panel 之外 —— 各 Tab 渲染时用 innerHTML 覆写自己的容器，
+   碰不到工具条，所以只需要在切换时更新一次。 */
+var TAB_META={
+  today:{name:'今日打卡',icon:'calendar'},
+  dashboard:{name:'进度看板',icon:'grid'},
+  weekly:{name:'周报复盘',icon:'report'},
+  mine:{name:'我的',icon:'user'}
+};
+function updateTopbar(){
+  var meta=TAB_META[S.tab]||TAB_META.today;
+  var icon=document.getElementById('topbar-icon');
+  var title=document.getElementById('topbar-title');
+  if(icon)icon.innerHTML=ic(meta.icon,18);
+  if(title)title.textContent=meta.name;
+  document.title=meta.name+' · 学习目标管理台';
+  /* 主操作按钮：每个模块一个「这个页面最该干的事」，比在页面里堆一排按钮更像仪表盘 */
+  var act=document.getElementById('topbar-action');
+  if(!act)return;
+  if(S.tab==='today'){
+    act.style.display='';
+    act.innerHTML=ic('plus',16)+'新建目标';
+    act.onclick=function(){window.openNewGoal()};
+  }else if(S.tab==='weekly'){
+    act.style.display='';
+    act.innerHTML=ic('copy',16)+'生成周报';
+    act.onclick=function(){window.generateWeeklyText()};
+  }else{
+    act.style.display='none';
+    act.onclick=null;
+  }
+}
+
+function switchTab(tab){
+  S.tab=tab;
+  document.querySelectorAll('.nav-item').forEach(function(b){
+    var on=b.getAttribute('data-tab')===tab;
+    b.classList.toggle('active',on);
+    b.setAttribute('aria-selected',on?'true':'false');
+  });
+  document.querySelectorAll('.tab-panel').forEach(function(p){p.classList.toggle('active',p.id==='tab-'+tab)});
+  /* 标题与主操作跟着走：这里只更新工具条，不去动各 Tab 的内容（各 Tab 自己渲染） */
+  updateTopbar();
+  if(tab==='dashboard')renderDashboard();
+  if(tab==='weekly')renderWeekly();
+  if(tab==='mine')renderMine();
+}
+
+/* ====== 按钮动效（配合样式表末尾的「按钮动效层」） ====== */
+
+/* 涟漪：用事件委托挂在 document 上。
+   ⚠️ 绝不能「初始化时 querySelectorAll('.btn') 再逐个 addEventListener」——
+      本页按钮几乎全部由 innerHTML 动态生成，每次重渲染都会换掉 DOM，
+      逐个绑只会绑到已被丢弃的节点上：点了没有任何反应，且不报任何错。
+   ⚠️ 用 pointerdown 不用 click：click 要等 pointerup 才触发，按下瞬间没反馈。
+      键盘回车/空格走的是 click（没有坐标），那条路径交给聚焦环 + 成功回弹兜底。 */
+var RIPPLE_SEL='.btn-primary,.btn-success,.btn-danger,.btn-amber';
+document.addEventListener('pointerdown',function(e){
+  var t=e.target;
+  if(!t||!t.closest)return;
+  var b=t.closest(RIPPLE_SEL);
+  if(!b||b.disabled)return;
+  var r=b.getBoundingClientRect();
+  if(!r.width)return;
+  var d=Math.max(r.width,r.height)*2.2;
+  var s=document.createElement('span');
+  s.className='ripple';
+  s.style.width=s.style.height=d+'px';
+  s.style.left=(e.clientX-r.left)+'px';
+  s.style.top=(e.clientY-r.top)+'px';
+  b.appendChild(s);
+  /* 到点就删，否则连点会攒一堆节点。用 setTimeout 而不是 animationend：
+     按钮可能在这期间被重渲染换掉，那时永远不会有 animationend，节点就漏在内存里。 */
+  setTimeout(function(){if(s.parentNode)s.parentNode.removeChild(s)},700);
+},true);
+
+/* 按钮忙碌态：写库期间锁住按钮 + 显示环形 spinner。
+   ⚠️ 这条首先是防重复提交、其次才是动效 —— 打卡按钮原先没有锁，
+      网络慢时连点两下会往库里写两条一模一样的记录。 */
+function setBtnBusy(btn,on){
+  if(!btn)return;
+  if(on){btn.classList.add('is-busy');btn.setAttribute('aria-busy','true')}
+  else{btn.classList.remove('is-busy');btn.removeAttribute('aria-busy')}
+}
+
+/* ====== Init ====== */
+function renderSkeleton(){
+  renderToday();renderDashboard();renderWeekly();renderMine();
+  document.querySelectorAll('.nav-item').forEach(function(b){
+    b.onclick=function(){switchTab(b.getAttribute('data-tab'))};
+  });
+  /* 工具条的标题/主操作按钮也要在首帧填好，否则会看到一个空白标题 */
+  updateTopbar();
+  document.getElementById('modal-overlay').onclick=function(e){if(e.target===e.currentTarget)hideModal()};
+}
+
+/* 先把主题控件的图标/文案对齐 —— 首屏数据还没回来，但顶栏已经在屏幕上了，
+   不能等到 loadAll 完成才填图标，否则会看到一个空按钮。 */
+applyTheme();
+/* 骨架屏这一次渲染是「刷新 / 登录回来」后的首屏，允许填回暂存；
+   从第二帧起（所有后续 renderAll）只做展示，不再动暂存 ——
+   否则写失败当场 renderAll() 就会把刚存下的内容又填回并清掉。 */
+renderSkeleton();
+loadAll();
+/* ====== Global exports for inline onclick handlers ====== */
+window.loadAll=loadAll;
+window.hideModal=hideModal;
+/* 排障出口：出问题时在控制台敲 __S.readonly / __S.sync 看真实状态，
+   __dbg.loginHref() 看待登录跳转地址，__dbg.leftover() 看暂存内容，
+   __dbg.dateCheck() 一次性核对所有目标的日期读回情况（字段没存上会立刻暴露）。
+   （这些辅助函数都包在 IIFE 里，不从这里放出来就在控制台拿不到。） */
+window.__S=S;
+window.__dbg={
+  readonly:function(){return S.readonly},
+  loginHref:function(){return buildLoginHref()},
+  leftover:function(){return readLeftover()},
+  saveLeftover:saveLeftover,
+  clearLeftover:clearLeftover,
+  restore:restoreLeftoverToForms,
+  /* 按钮忙碌态的开/关。放出来有两个用处：
+     ① 线上排查「点了没反应」时，可以手动 setBtnBusy(某按钮,true) 看是不是卡住了；
+     ② 自动化验证能直接调它，而不是自己 classList.add('is-busy') ——
+        后者会绕过 aria-busy 的设置，测出来的是「类生效了但属性没写」的假象。 */
+  setBtnBusy:setBtnBusy,
+  parseDate:parseDate,
+  isInvalid:isInvalid,
+  /* 一眼看出「哪些目标的日期其实是空的」—— 这类问题以前完全静默 */
+  dateCheck:function(){
+    return S.goals.map(function(g){
+      return {
+        名称:g['目标名称'],
+        截止原始:g['截止日期'],
+        截止可用:hasDeadline(g),
+        剩余天数:getRemainingDays(g),
+        建议量:getTodaySuggested(g),
+        创建原始:g['创建日期'],
+        创建可用:!isInvalid(parseDate(g['创建日期']))
+      };
+    });
+  },
+  /* 核对「周报口径」与「今天打卡」是否对得上 —— 排查「看不到今天的卡」用这个，
+     一次给出：全表条数 / 今天条数 / 本周明细卡渲染条数 / 孤儿条数。 */
+  weekCheck:function(){
+    var tk=todayKey();
+    var todays=S.checkins.filter(function(c){return dkey(parseDate(c['日期']))===tk});
+    var card=document.getElementById('week-records');
+    var totalMin=0,totalCnt=0;
+    S.checkins.forEach(function(c){
+      if(isOrphanCheckin(c))return;
+      var dk=dkey(parseDate(c['日期']));
+      if(dk>=dkey(weekStart(new Date()))&&dk<=tk){
+        totalMin+=(c['分钟数']||0);totalCnt++;
+      }
+    });
+    return {
+      页面今天:tk,
+      全表打卡条数:S.checkins.length,
+      今天条数:todays.length,
+      今天明细:todays.map(function(c){
+        var g=goalById(c['目标ID']);
+        return (g?g['目标名称']:'(已删目标)')+' +'+trimNum(c['数量']||0)+(g?(g['单位']||''):'')+
+               (c['分钟数']>0?(' · 用时 '+c['分钟数']+'分钟'):' · 未记分钟');
+      }),
+      /* ⚠️ 专门为「我明明填了分钟，怎么没识别」这类问题准备的逐条清单。
+         排查时先看这里：只要「分钟数」有值，就说明**写入没问题**，
+         问题在显示口径（例如目标单位本来就是「小时」，1 小时 + 用时60分钟并排显示
+         会像同一件事说了两遍）。别一上来就怀疑数据丢了。 */
+      今天分钟核对:todays.map(function(c){
+        var g=goalById(c['目标ID']);
+        return {
+          目标:g?g['目标名称']:'(已删目标)',
+          单位:g?(g['单位']||''):'',
+          数量:c['数量']||0,
+          分钟数:c['分钟数']||0,
+          写入状态:(c['分钟数']||0)>0?'已保存':'未填写/为0（选填字段，未填即为0）'
+        };
+      }),
+      本周明细卡:card?card.querySelectorAll('.record-item').length:'(未渲染该Tab)',
+      本周汇总:S.weekCtx?{投入量:S.weekCtx.amt,天数:S.weekCtx.days,
+        /* ⚠️ 这里给的是**原始分钟累计**（没记就是 0），不是界面上那个「未记」。
+           周报页在分钟为 0 且本周有打卡时会把 0 显示成「未记」，两者不一致是**故意的**：
+           0 = 事实（数据里确实没分钟），「未记」= 给用户看的措辞（避免被读成「投入为零」）。
+           排障时看这个字段判断事实，看界面判断措辞，别把两者混为一谈。 */
+        分钟原始累计:S.weekCtx.mins,
+        分钟显示为:S.weekCtx.mins==='0'&&S.weekCtx.days>0?'未记':S.weekCtx.mins}:null,
+      /* 节奏/热力图口径：判据是「有没有打卡」，不是「有没有分钟」 */
+      本周节奏口径:{打卡笔数:totalCnt,分钟合计:totalMin,
+        说明:totalCnt>0&&totalMin===0?'有打卡但都没记分钟 → 格子仍会亮，标题显示「已打卡 N 次」':'正常'},
+      孤儿条数:findOrphanCheckins().length
+    };
+  },
+  /* 主题自检：一次给出「用户的选择值 / 实际生效值 / 落在 html 上的属性 /
+     关键令牌的最终取值」。排查「某处颜色在暗色下看不清」时，
+     先看这几个令牌算出来的到底是什么色，比在 CSS 里翻半天快得多。 */
+  theme:function(){
+    var root=document.documentElement,cs=getComputedStyle(root);
+    var keys=['--bg','--card','--surface-2','--text','--muted','--border','--primary','--primary-bg',
+              '--success','--success-bg','--danger','--danger-bg','--amber','--amber-bg',
+              '--heat-0','--heat-4','--header-from','--toast-bg','--toast-text'];
+    var tokens={};
+    keys.forEach(function(k){tokens[k]=cs.getPropertyValue(k).trim()});
+    return{
+      选择:themeMode(),
+      实际:themeEffective(),
+      html属性:root.getAttribute('data-theme'),
+      系统偏好:(_mql&&_mql.matches)?'dark':'light',
+      已存localStorage:(function(){try{return localStorage.getItem(THEME_KEY)}catch(e){return'(不可读)'}})(),
+      令牌:tokens
+    };
+  },
+  /* 动效自检：确认按钮动效层真的生效 —— 曲线/时长解析出来是什么、
+     按钮有没有被裁切（涟漪靠它才不会溢出到按钮外）、系统是否开了「减少动效」。
+     ⚠️ 系统开了「减少动效」时，涟漪与 spinner 会被主动隐藏，这是**预期行为**；
+        排查「点按钮怎么没波纹」之前先看这个字段，别一头扎进 CSS 里找。 */
+  motion:function(){
+    var cs=getComputedStyle(document.documentElement);
+    var b=document.querySelector('.btn');
+    var bs=b?getComputedStyle(b):null;
+    return{
+      弹簧曲线:cs.getPropertyValue('--ease-spring').trim()||'(未定义)',
+      按压时长:cs.getPropertyValue('--motion-press').trim()||'(未定义)',
+      系统减少动效:!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches),
+      按钮过渡属性:bs?bs.transitionProperty:'(页面上当前没有 .btn)',
+      按钮过渡曲线:bs?bs.transitionTimingFunction:'(页面上当前没有 .btn)',
+      按钮已裁切:bs?bs.overflow:'(页面上当前没有 .btn)',
+      待回弹目标:S._popId,
+      忙碌中按钮数:document.querySelectorAll('.btn.is-busy').length
+    };
+  },
+  /* 备注功能自检（第十二阶段）：一次给出「数据里有什么 / 界面上渲染了什么」。
+     专治「我明明写了备注，怎么列表里没看到」——先看「原始备注清单」就能分清是
+     ① 没写进库（数据侧问题），还是 ② 写进去了但某个展示位没渲染（渲染侧问题）。
+     这与 weekCheck 的分工一致：那个管「打卡记录」，这个管「备注」。
+     另外「备注字段在数据里」是专门给「字段类型不匹配 → 服务端静默丢字段」留的探针：
+     若为 false，说明读回来的记录里根本没有备注这个 key，界面怎么写都不会显示。 */
+  noteCheck:function(){
+    var tk=todayKey();
+    var withNote=S.checkins.filter(function(c){return noteOf(c)});
+    var log=document.getElementById('study-log');
+    return {
+      备注字段在数据里:!!(S.checkins.length&&('备注' in S.checkins[0])),
+      全表条数:S.checkins.length,
+      有备注条数:withNote.length,
+      今天有备注条数:withNote.filter(function(c){return dkey(parseDate(c['日期']))===tk}).length,
+      原始备注清单:withNote.map(function(c){
+        var g=goalById(c['目标ID']);
+        return {目标:g?g['目标名称']:'(已删目标)',日期:dkey(parseDate(c['日期'])),备注:noteOf(c)};
+      }),
+      界面渲染:{
+        今日页备注行:document.querySelectorAll('#tab-today .rec-note').length,
+        本周明细备注行:document.querySelectorAll('#week-records .rec-note').length,
+        学习日志条数:log?log.querySelectorAll('.log-item').length:'(未渲染该Tab)',
+        学习日志备注条数:log?log.querySelectorAll('.log-note:not(.is-empty)').length:'(未渲染该Tab)',
+        备注输入框数:document.querySelectorAll('#tab-today textarea[id^=note_]').length,
+        编辑弹窗打开:!!document.getElementById('en_note')
+      }
+    };
+  }
+};
+
+})();
+</script>
+<!-- 本地模式下的数据备份 / 迁移入口。
+     页面主脚本包在 IIFE 里且是严格模式，外部拿不到内部函数，
+     所以这里只用 DOM + window.__SGT_LOCAL__ 做事，不碰业务代码。 -->
+<script>
+(function(){
+'use strict';
+var L=window.__SGT_LOCAL__;
+if(!L)return;
+var CARD_ID='sgt-backup-card';
+/* 「我的」页每次进入都会 innerHTML 整块重渲染，注入的卡片会被冲掉。
+   用 MutationObserver 盯着，重建一次补一次，比改业务代码安全。 */
+var injecting=false;
+function cardHTML(){
+  return '<div class="card card-body" id="'+CARD_ID+'" style="margin-top:12px">'+
+    '<div style="font-size:15px;font-weight:600;margin-bottom:6px">备份与迁移</div>'+
+    '<div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:12px">'+
+      '数据只存在这台设备的浏览器里。换设备、换浏览器、清理浏览数据都会丢，'+
+      '建议每隔一段时间导出一份 JSON 保存到网盘或邮箱。</div>'+
+    '<button class="btn btn-outline btn-block" style="margin-bottom:8px" data-sgt-act="export">'+
+      '导出备份（JSON）</button>'+
+    '<button class="btn btn-outline btn-block" style="margin-bottom:8px" data-sgt-act="import">'+
+      '从备份导入</button>'+
+    '<input type="file" id="sgt-import-file" accept=".json,application/json" style="display:none"/>'+
+    '<button class="btn btn-outline btn-block" data-sgt-act="reseed">恢复示例数据</button>'+
+    '<div class="tiny" style="padding:8px 0 0">导入会<b>覆盖</b>当前设备上的全部目标与打卡记录，请先导出留底。</div>'+
+    '<div id="sgt-backup-msg" class="tiny" style="padding:6px 0 0"></div>'+
+  '</div>';
+}
+function ensure(){
+  var mine=document.getElementById('tab-mine');
+  if(!mine)return;
+  if(mine.querySelector('#'+CARD_ID))return;
+  injecting=true;
+  try{mine.insertAdjacentHTML('beforeend',cardHTML())}catch(e){}
+  injecting=false;
+}
+function msg(t){
+  var el=document.getElementById('sgt-backup-msg');
+  if(el)el.textContent=t||'';
+}
+function stamp(){
+  var d=new Date(),p=function(n){return String(n).length<2?'0'+n:String(n)};
+  return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate());
+}
+function doExport(){
+  var data={format:'sgt-local-backup',version:1,exportedAt:new Date().toISOString(),tables:{}};
+  ['goals','checkins','weeklies'].forEach(function(k){
+    data.tables[L.ids[k]]=L.read(L.ids[k]);
+  });
+  var blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='学习目标管理台-备份-'+stamp()+'.json';
+  document.body.appendChild(a);a.click();
+  setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500);
+  msg('已导出，文件名：'+a.download);
+}
+function doImport(file){
+  var fr=new FileReader();
+  fr.onload=function(){
+    try{
+      var o=JSON.parse(String(fr.result));
+      var t=o&&o.tables;
+      if(!t)throw new Error('不是有效的备份文件');
+      var ok=false;
+      ['goals','checkins','weeklies'].forEach(function(k){
+        var id=L.ids[k];
+        if(Object.prototype.toString.call(t[id])==='[object Array]'){
+          L.write(id,t[id]);ok=true;
+        }
+      });
+      if(!ok)throw new Error('备份文件里没有可识别的数据表');
+      msg('导入完成，正在刷新…');
+      if(typeof window.loadAll==='function')window.loadAll();
+    }catch(e){msg('导入失败：'+(e&&e.message||e))}
+  };
+  fr.onerror=function(){msg('读取文件失败')};
+  fr.readAsText(file);
+}
+/* 事件委托：卡片会被反复重建，绑在元素上的监听会随 DOM 一起丢，
+   挂在 document 上一次绑定即可长期有效。 */
+document.addEventListener('click',function(e){
+  var el=e.target&&e.target.closest?e.target.closest('[data-sgt-act]'):null;
+  if(!el)return;
+  var act=el.getAttribute('data-sgt-act');
+  if(act==='export'){doExport();return}
+  if(act==='import'){
+    var f=document.getElementById('sgt-import-file');
+    if(f)f.click();
+    return;
+  }
+  if(act==='reseed'){
+    if(!window.confirm('会清空当前全部数据并重新写入示例目标，确定继续？'))return;
+    L.reseed();
+    if(typeof window.loadAll==='function')window.loadAll();
+    msg('已恢复示例数据');
+  }
+});
+document.addEventListener('change',function(e){
+  if(!e.target||e.target.id!=='sgt-import-file')return;
+  var f=e.target.files&&e.target.files[0];
+  if(f)doImport(f);
+  e.target.value='';
+});
+function boot(){
+  var mine=document.getElementById('tab-mine');
+  if(!mine){setTimeout(boot,120);return}
+  if(window.MutationObserver){
+    var mo=new MutationObserver(function(){
+      if(injecting)return;
+      ensure();
+    });
+    mo.observe(mine,{childList:true});
+  }
+  ensure();
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);
+else boot();
+})();
+</script>
+
+</body>
+</html>
